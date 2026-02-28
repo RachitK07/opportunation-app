@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 // ── DATA ────────────────────────────────────────────────────────────────────
 
@@ -598,7 +598,7 @@ function MethodologyPage() {
       {/* Last updated */}
       <div style={{ marginTop: 40, padding: "20px 24px", background: "rgba(255,255,255,0.02)", borderRadius: 12, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>📅 Data last reviewed: <span style={{ color: "rgba(255,255,255,0.5)", fontWeight: 600 }}>Q1 2026</span></div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>Built by <span style={{ color: "rgba(255,255,255,0.5)", fontWeight: 600 }}>Rachit Khandelwal.</span> · Applied Statistics · Edtech & BizOps Background</div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>Built by <span style={{ color: "rgba(255,255,255,0.5)", fontWeight: 600 }}>Rachit K.</span> · Applied Statistics · Edtech & BizOps Background</div>
       </div>
     </div>
   );
@@ -616,7 +616,7 @@ export default function App() {
   const country = selectedCountry ? COUNTRIES[selectedCountry] : null;
   const sectorData = country && selectedSector ? country.sectors[selectedSector] : null;
 
-  const totalJobs = Object.values(COUNTRIES).reduce((acc, c) => acc + Object.keys(c.sectors).length * 12, 0);
+  
 
   return (
     <div style={S.app}>
