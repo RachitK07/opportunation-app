@@ -1,14 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // ── CURRENCY CONFIG ───────────────────────────────────────────────────────────
 
-const CURRENCIES = {
-  USD: { symbol: "$", rate: 1, label: "USD" },
-  SGD: { symbol: "S$", rate: 1.34, label: "SGD" },
-  MYR: { symbol: "RM", rate: 4.72, label: "MYR" },
-  IDR: { symbol: "Rp", rate: 16200, label: "IDR" },
-  THB: { symbol: "฿", rate: 35.5, label: "THB" },
+const CURRENCY_META = {
+  USD: { symbol: "$", label: "USD" },
+  SGD: { symbol: "S$", label: "SGD" },
+  MYR: { symbol: "RM", label: "MYR" },
+  IDR: { symbol: "Rp", label: "IDR" },
+  THB: { symbol: "฿", label: "THB" },
 };
+
+const FALLBACK_RATES = {
+  USD: 1, SGD: 1.34, MYR: 4.72, IDR: 16200, THB: 35.5,
+};
+
+const EXCHANGE_API = "https://v6.exchangerate-api.com/v6/430733d7d390f48dc6e29d46/latest/USD";
 
 // ── TAX BRACKETS ─────────────────────────────────────────────────────────────
 
@@ -207,10 +213,16 @@ const EXPERIENCE_LABELS = { entry: "Entry Level (0–2 yrs)", mid: "Mid Level (3
 const scoreColor = (score) => score >= 75 ? "#00e5a0" : score >= 50 ? "#f5c842" : "#ff6b6b";
 const accessColor = (a) => a === "Easy" ? "#00e5a0" : a === "Moderate" ? "#f5c842" : "#ff6b6b";
 
-const fmt = (usd, currency) => {
-  const { symbol, rate } = CURRENCIES[currency];
+const fmt = (usd, currency, rates) => {
+  const meta = CURRENCY_META[currency];
+  const rate = rates[currency] || FALLBACK_RATES[currency] || 1;
+  const symbol = meta.symbol;
   const val = Math.round(usd * rate);
-  if (rate >= 1000) return `${symbol}${(val / 1000).toFixed(0)}K`;
+  if (rate >= 10000) {
+    const thousands = val / 1000;
+    const formatted = thousands >= 1000 ? Math.round(thousands).toLocaleString() : Math.round(thousands).toString();
+    return `${symbol}${formatted}K`;
+  }
   return `${symbol}${val.toLocaleString()}`;
 };
 
@@ -269,13 +281,13 @@ const S = {
 
 // ── COL TIERS DISPLAY ─────────────────────────────────────────────────────────
 
-function ColTiers({ col, currency }) {
+function ColTiers({ col, currency, rates }) {
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
       {[["Budget", col.budget, "#00e5a0"], ["Comfortable", col.comfortable, "#f5c842"], ["Luxury", col.luxury, "#ff6b6b"]].map(([label, val, color]) => (
         <div key={label} style={{ flex: 1, minWidth: 80, background: `${color}10`, border: `1px solid ${color}25`, borderRadius: 10, padding: "8px 12px", textAlign: "center" }}>
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>{label}</div>
-          <div style={{ fontSize: 14, fontWeight: 800, color }}>{fmt(val, currency)}/mo</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color }}>{fmt(val, currency, rates)}/mo</div>
         </div>
       ))}
     </div>
@@ -284,7 +296,7 @@ function ColTiers({ col, currency }) {
 
 // ── TAX ESTIMATOR ─────────────────────────────────────────────────────────────
 
-function TaxEstimator({ grossUSD, countryName, currency }) {
+function TaxEstimator({ grossUSD, countryName, currency, rates }) {
   const { tax, rate, net } = calcTax(grossUSD, countryName);
   const note = TAX_BRACKETS[countryName]?.note;
   return (
@@ -293,15 +305,15 @@ function TaxEstimator({ grossUSD, countryName, currency }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 12, marginBottom: 14 }}>
         <div style={S.infoCard}>
           <div style={S.label}>Gross Salary</div>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>{fmt(grossUSD, currency)}/mo</div>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>{fmt(grossUSD, currency, rates)}/mo</div>
         </div>
         <div style={S.infoCard}>
           <div style={S.label}>Est. Income Tax (~{rate}%)</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#ff6b6b" }}>-{fmt(tax, currency)}/mo</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#ff6b6b" }}>-{fmt(tax, currency, rates)}/mo</div>
         </div>
         <div style={{ ...S.infoCard, background: "rgba(0,229,160,0.05)", border: "1px solid rgba(0,229,160,0.15)" }}>
           <div style={S.label}>Est. Take-Home Pay</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#00e5a0" }}>{fmt(net, currency)}/mo</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#00e5a0" }}>{fmt(net, currency, rates)}/mo</div>
         </div>
       </div>
       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", lineHeight: 1.65, marginBottom: 6 }}>{note}</div>
@@ -352,7 +364,7 @@ function RemoteWorkSection({ countryName }) {
 
 // ── SALARY CALCULATOR ─────────────────────────────────────────────────────────
 
-function SalaryCalculator({ currency }) {
+function SalaryCalculator({ currency, rates }) {
   const [salary, setSalary] = useState("");
   const [country, setCountry] = useState("Singapore");
   const [result, setResult] = useState(null);
@@ -388,24 +400,24 @@ function SalaryCalculator({ currency }) {
         <>
           <div style={{ marginBottom: 16 }}>
             <div style={S.label}>Cost of Living Tiers — {country}</div>
-            <ColTiers col={COUNTRIES[country].costOfLiving} currency={currency} />
+            <ColTiers col={COUNTRIES[country].costOfLiving} currency={currency} rates={rates} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 16 }}>
             <div style={{ ...S.infoCard, background: "rgba(0,229,160,0.05)", border: "1px solid rgba(0,229,160,0.15)" }}>
               <div style={S.label}>Your Salary</div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: "#00e5a0" }}>{fmt(result.grossUSD, currency)}</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: "#00e5a0" }}>{fmt(result.grossUSD, currency, rates)}</div>
             </div>
             <div style={S.infoCard}>
               <div style={S.label}>Comfortable COL</div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: "#f5c842" }}>{fmt(result.col, currency)}</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: "#f5c842" }}>{fmt(result.col, currency, rates)}</div>
             </div>
             <div style={{ ...S.infoCard, background: result.comfortable ? "rgba(0,229,160,0.05)" : "rgba(255,107,107,0.05)", border: `1px solid ${result.comfortable ? "rgba(0,229,160,0.2)" : "rgba(255,107,107,0.2)"}` }}>
               <div style={S.label}>Net Buffer</div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: result.comfortable ? "#00e5a0" : "#ff6b6b" }}>{fmt(result.buffer, currency)}</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: result.comfortable ? "#00e5a0" : "#ff6b6b" }}>{fmt(result.buffer, currency, rates)}</div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>{result.comfortable ? "✓ Comfortable" : "⚠ Tight"}</div>
             </div>
           </div>
-          <TaxEstimator grossUSD={result.grossUSD} countryName={country} currency={currency} />
+          <TaxEstimator grossUSD={result.grossUSD} countryName={country} currency={currency} rates={rates} />
         </>
       )}
     </div>
@@ -414,7 +426,7 @@ function SalaryCalculator({ currency }) {
 
 // ── SUITABILITY SCORE ─────────────────────────────────────────────────────────
 
-function SuitabilityScore({ currency }) {
+function SuitabilityScore({ currency, rates }) {
   const [sector, setSector] = useState("");
   const [experience, setExperience] = useState("");
   const [country, setCountry] = useState("");
@@ -482,13 +494,13 @@ function SuitabilityScore({ currency }) {
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 14 }}>
-              <div style={S.infoCard}><div style={S.label}>Avg Salary</div><div style={{ fontSize: 20, fontWeight: 800, color: "#00e5a0" }}>{fmt(result.salary, currency)}/mo</div></div>
-              <div style={S.infoCard}><div style={S.label}>Net Buffer (vs Comfortable COL)</div><div style={{ fontSize: 20, fontWeight: 800, color: result.buffer > 0 ? "#00e5a0" : "#ff6b6b" }}>{fmt(result.buffer, currency)}/mo</div></div>
+              <div style={S.infoCard}><div style={S.label}>Avg Salary</div><div style={{ fontSize: 20, fontWeight: 800, color: "#00e5a0" }}>{fmt(result.salary, currency, rates)}/mo</div></div>
+              <div style={S.infoCard}><div style={S.label}>Net Buffer (vs Comfortable COL)</div><div style={{ fontSize: 20, fontWeight: 800, color: result.buffer > 0 ? "#00e5a0" : "#ff6b6b" }}>{fmt(result.buffer, currency, rates)}/mo</div></div>
               <div style={S.infoCard}><div style={S.label}>Foreign Access</div><Badge label={result.access} color={accessColor(result.access)} /></div>
               <div style={S.infoCard}><div style={S.label}>Market Demand</div><Badge label={result.demand} color={scoreColor(result.demand === "Very High" ? 90 : result.demand === "High" ? 78 : result.demand === "Moderate" ? 55 : 30)} /></div>
             </div>
             <div style={S.notesBox}>{result.notes}</div>
-            {country && <TaxEstimator grossUSD={result.salary} countryName={country} currency={currency} />}
+            {country && <TaxEstimator grossUSD={result.salary} countryName={country} currency={currency} rates={rates} />}
           </div>
         );
       })()}
@@ -498,7 +510,7 @@ function SuitabilityScore({ currency }) {
 
 // ── COUNTRY COMPARISON ────────────────────────────────────────────────────────
 
-function CountryComparison({ currency }) {
+function CountryComparison({ currency, rates }) {
   const [c1, setC1] = useState("Singapore");
   const [c2, setC2] = useState("Malaysia");
   const [sector, setSector] = useState("Finance & Banking");
@@ -537,9 +549,9 @@ function CountryComparison({ currency }) {
         <Row label="Foreigner Friendliness" v1={d1.foreignerFriendliness} v2={d2.foreignerFriendliness} higher format={v => `${v}/100`} />
         <Row label="Economic Score" v1={d1.economicScore} v2={d2.economicScore} higher format={v => `${v}/100`} />
         <Row label="Permit Difficulty" v1={d1.permitDifficultyScore} v2={d2.permitDifficultyScore} format={() => `${d1.workPermitDifficulty} vs ${d2.workPermitDifficulty}`} />
-        <Row label="COL (Comfortable)" v1={d1.costOfLiving.comfortable} v2={d2.costOfLiving.comfortable} format={v => `${fmt(v, currency)}/mo`} />
-        <Row label={`${sector} Salary (${exp})`} v1={s1.avgSalaryUSD[exp]} v2={s2.avgSalaryUSD[exp]} higher format={v => `${fmt(v, currency)}/mo`} />
-        <Row label="Net Buffer" v1={s1.avgSalaryUSD[exp] - d1.costOfLiving.comfortable} v2={s2.avgSalaryUSD[exp] - d2.costOfLiving.comfortable} higher format={v => `${fmt(v, currency)}/mo`} />
+        <Row label="COL (Comfortable)" v1={d1.costOfLiving.comfortable} v2={d2.costOfLiving.comfortable} format={v => `${fmt(v, currency, rates)}/mo`} />
+        <Row label={`${sector} Salary (${exp})`} v1={s1.avgSalaryUSD[exp]} v2={s2.avgSalaryUSD[exp]} higher format={v => `${fmt(v, currency, rates)}/mo`} />
+        <Row label="Net Buffer" v1={s1.avgSalaryUSD[exp] - d1.costOfLiving.comfortable} v2={s2.avgSalaryUSD[exp] - d2.costOfLiving.comfortable} higher format={v => `${fmt(v, currency, rates)}/mo`} />
         <Row label="Demand Score" v1={s1.demandScore} v2={s2.demandScore} higher format={v => `${v}/100`} />
         <Row label="Remote Work" v1={COUNTRIES[c1].remoteWork.ratingScore} v2={COUNTRIES[c2].remoteWork.ratingScore} higher format={(v) => v === COUNTRIES[c1].remoteWork.ratingScore ? COUNTRIES[c1].remoteWork.rating : COUNTRIES[c2].remoteWork.rating} />
       </div>
@@ -659,6 +671,23 @@ export default function App() {
   const [hovC, setHovC] = useState(null);
   const [hovS, setHovS] = useState(null);
   const [currency, setCurrency] = useState("USD");
+  const [rates, setRates] = useState(FALLBACK_RATES);
+  const [ratesLive, setRatesLive] = useState(false);
+  const [ratesLoading, setRatesLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(EXCHANGE_API)
+      .then(r => r.json())
+      .then(data => {
+        if (data.result === "success") {
+          const r = data.conversion_rates;
+          setRates({ USD: 1, SGD: r.SGD, MYR: r.MYR, IDR: r.IDR, THB: r.THB });
+          setRatesLive(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setRatesLoading(false));
+  }, []);
 
   const country = selectedCountry ? COUNTRIES[selectedCountry] : null;
   const sectorData = country && selectedSector ? country.sectors[selectedSector] : null;
@@ -683,8 +712,8 @@ export default function App() {
 
       {/* CURRENCY NOTE */}
       {currency !== "USD" && (
-        <div style={{ background: "rgba(0,229,160,0.04)", borderBottom: "1px solid rgba(0,229,160,0.1)", padding: "8px 24px", fontSize: 11, color: "rgba(0,229,160,0.6)", textAlign: "center" }}>
-          Showing values in {currency} · Rates approximate as of Q1 2026 · All salary data sourced in USD
+        <div style={{ background: ratesLive ? "rgba(0,229,160,0.04)" : "rgba(245,200,66,0.04)", borderBottom: `1px solid ${ratesLive ? "rgba(0,229,160,0.1)" : "rgba(245,200,66,0.1)"}`, padding: "8px 24px", fontSize: 11, color: ratesLive ? "rgba(0,229,160,0.7)" : "rgba(245,200,66,0.7)", textAlign: "center" }}>
+          {ratesLoading ? "⏳ Fetching live rates..." : ratesLive ? `✓ Live rates · 1 USD = ${rates[currency].toLocaleString(undefined, {maximumFractionDigits: 2})} ${currency} · Updated today` : "⚠ Using fallback rates · Live rates unavailable · All salary data sourced in USD"}
         </div>
       )}
 
@@ -746,7 +775,7 @@ export default function App() {
             ))}
             <div style={S.infoCard}>
               <div style={S.label}>Cost of Living — {country.capital}</div>
-              <ColTiers col={country.costOfLiving} currency={currency} />
+              <ColTiers col={country.costOfLiving} currency={currency} rates={rates} />
             </div>
           </div>
 
@@ -771,7 +800,7 @@ export default function App() {
                   <div style={{ fontSize: 24, marginBottom: 8 }}>{SECTOR_ICONS[sec]}</div>
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{sec}</div>
                   <ScoreBar score={s.demandScore} />
-                  <div style={{ fontSize: 12, color: "#00e5a0", fontWeight: 600, marginTop: 6 }}>{fmt(s.avgSalaryUSD.mid, currency)}/mo avg</div>
+                  <div style={{ fontSize: 12, color: "#00e5a0", fontWeight: 600, marginTop: 6 }}>{fmt(s.avgSalaryUSD.mid, currency, rates)}/mo avg</div>
                 </div>
               );
             })}
@@ -806,11 +835,11 @@ export default function App() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 20 }}>
                   <div style={{ ...S.infoCard, background: "rgba(0,229,160,0.05)", border: "1px solid rgba(0,229,160,0.15)" }}>
                     <div style={S.label}>Avg Salary</div>
-                    <div style={{ fontSize: 26, fontWeight: 900, color: "#00e5a0" }}>{fmt(salary, currency)}<span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>/mo</span></div>
+                    <div style={{ fontSize: 26, fontWeight: 900, color: "#00e5a0" }}>{fmt(salary, currency, rates)}<span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>/mo</span></div>
                   </div>
                   <div style={S.infoCard}>
                     <div style={S.label}>Buffer vs Comfortable COL</div>
-                    <div style={{ fontSize: 26, fontWeight: 900, color: buffer > 0 ? "#00e5a0" : "#ff6b6b" }}>{fmt(buffer, currency)}/mo</div>
+                    <div style={{ fontSize: 26, fontWeight: 900, color: buffer > 0 ? "#00e5a0" : "#ff6b6b" }}>{fmt(buffer, currency, rates)}/mo</div>
                     <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 3 }}>{buffer > 500 ? "✓ Comfortable" : buffer > 0 ? "⚠ Tight" : "✗ Deficit"}</div>
                   </div>
                   <div style={S.infoCard}>
@@ -823,7 +852,7 @@ export default function App() {
                     <div style={{ marginTop: 8 }}><ScoreBar score={sectorData.demandScore} /></div>
                   </div>
                 </div>
-                <TaxEstimator grossUSD={salary} countryName={selectedCountry} currency={currency} />
+                <TaxEstimator grossUSD={salary} countryName={selectedCountry} currency={currency} rates={rates} />
               </>
             );
           })()}
@@ -850,9 +879,9 @@ export default function App() {
               <button key={id} style={S.tab(toolTab === id)} onClick={() => setToolTab(id)}>{label}</button>
             ))}
           </div>
-          {toolTab === "calculator" && <SalaryCalculator currency={currency} />}
-          {toolTab === "suitability" && <SuitabilityScore currency={currency} />}
-          {toolTab === "compare" && <CountryComparison currency={currency} />}
+          {toolTab === "calculator" && <SalaryCalculator currency={currency} rates={rates} />}
+          {toolTab === "suitability" && <SuitabilityScore currency={currency} rates={rates} />}
+          {toolTab === "compare" && <CountryComparison currency={currency} rates={rates} />}
         </div>
       )}
 
