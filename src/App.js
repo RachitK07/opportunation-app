@@ -705,7 +705,7 @@ export default function App() {
           <button style={S.navBtn(page === "tools")} onClick={() => setPage("tools")}>🛠 Tools</button>
           <button style={S.navBtn(page === "methodology")} onClick={() => setPage("methodology")}>📐 Methodology</button>
           <select style={S.currencySelect} value={currency} onChange={e => setCurrency(e.target.value)}>
-            {Object.keys(CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
+            {Object.keys(CURRENCY_META).map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
       </div>
