@@ -1,14 +1,92 @@
 import { useState } from "react";
 
-// ── DATA ────────────────────────────────────────────────────────────────────
+// ── CURRENCY CONFIG ───────────────────────────────────────────────────────────
+
+const CURRENCIES = {
+  USD: { symbol: "$", rate: 1, label: "USD" },
+  SGD: { symbol: "S$", rate: 1.34, label: "SGD" },
+  MYR: { symbol: "RM", rate: 4.72, label: "MYR" },
+  IDR: { symbol: "Rp", rate: 16200, label: "IDR" },
+  THB: { symbol: "฿", rate: 35.5, label: "THB" },
+};
+
+// ── TAX BRACKETS ─────────────────────────────────────────────────────────────
+
+const TAX_BRACKETS = {
+  Indonesia: {
+    brackets: [
+      { upTo: 500, rate: 0.05 },
+      { upTo: 2500, rate: 0.15 },
+      { upTo: 8333, rate: 0.25 },
+      { upTo: Infinity, rate: 0.30 },
+    ],
+    note: "Indonesian progressive tax (PPh 21). Foreign workers taxed as residents after 183 days.",
+  },
+  Singapore: {
+    brackets: [
+      { upTo: 1667, rate: 0 },
+      { upTo: 4167, rate: 0.02 },
+      { upTo: 8333, rate: 0.035 },
+      { upTo: 16667, rate: 0.07 },
+      { upTo: Infinity, rate: 0.115 },
+    ],
+    note: "Singapore progressive tax. One of Southeast Asia's lowest personal income tax rates.",
+  },
+  Malaysia: {
+    brackets: [
+      { upTo: 833, rate: 0 },
+      { upTo: 2500, rate: 0.01 },
+      { upTo: 4167, rate: 0.03 },
+      { upTo: 8333, rate: 0.08 },
+      { upTo: Infinity, rate: 0.13 },
+    ],
+    note: "Malaysian progressive tax. Foreigners taxed at flat 28% if non-resident (staying < 182 days).",
+  },
+  Thailand: {
+    brackets: [
+      { upTo: 1389, rate: 0 },
+      { upTo: 4167, rate: 0.05 },
+      { upTo: 8333, rate: 0.10 },
+      { upTo: 16667, rate: 0.15 },
+      { upTo: Infinity, rate: 0.20 },
+    ],
+    note: "Thai progressive tax. Foreign-sourced income not remitted to Thailand may be exempt.",
+  },
+};
+
+const calcTax = (grossUSD, country) => {
+  const brackets = TAX_BRACKETS[country]?.brackets;
+  if (!brackets) return { tax: 0, rate: 0, net: grossUSD };
+  let tax = 0, prev = 0;
+  for (const b of brackets) {
+    if (grossUSD <= prev) break;
+    const taxable = Math.min(grossUSD, b.upTo) - prev;
+    tax += taxable * b.rate;
+    prev = b.upTo;
+  }
+  const rate = grossUSD > 0 ? (tax / grossUSD) * 100 : 0;
+  return { tax: Math.round(tax), rate: Math.round(rate), net: Math.round(grossUSD - tax) };
+};
+
+// ── DATA ──────────────────────────────────────────────────────────────────────
 
 const COUNTRIES = {
   Indonesia: {
     flag: "🇮🇩", capital: "Jakarta", currency: "IDR", language: "Bahasa Indonesia",
     economicScore: 62, foreignerFriendliness: 48, permitDifficultyScore: 75,
-    workPermitDifficulty: "High", costOfLivingUSD: 1100,
+    workPermitDifficulty: "High",
+    costOfLiving: { budget: 700, comfortable: 1100, luxury: 2000 },
     overview: "Indonesia enforces strict RPTKA regulations requiring company sponsorship. Foreigners cannot hold roles locals can fill. Government tightened restrictions post-2022.",
     recentPolicy: "Companies must justify foreign hires and train local replacements. Work permits (KITAS) are tied to the sponsoring employer and expire with contract.",
+    remoteWork: {
+      rating: "Difficult",
+      ratingScore: 30,
+      visaOption: "No dedicated remote work visa. Standard tourist visa (B211A) allows 60 days, extendable to 180 days but does not permit working for foreign clients legally.",
+      bestFor: "Short-term stays only. Bali's digital nomad scene is large but legally grey.",
+      restrictions: "Working remotely for foreign companies without a work permit technically requires a KITAS. Enforcement is limited but risk exists.",
+      internetSpeed: "Average 25 Mbps in Jakarta, 15 Mbps in Bali",
+      coworkingCost: "$100–250/month in Jakarta or Bali",
+    },
     permitSteps: [
       { step: "Job offer from Indonesian company", docs: "Contract, company license", time: "Varies", cost: "—" },
       { step: "RPTKA approval (Foreign Worker Plan)", docs: "RPTKA form, job description, company docs", time: "2–4 weeks", cost: "$200–500" },
@@ -27,9 +105,19 @@ const COUNTRIES = {
   Singapore: {
     flag: "🇸🇬", capital: "Singapore", currency: "SGD", language: "English / Mandarin / Malay",
     economicScore: 92, foreignerFriendliness: 80, permitDifficultyScore: 45,
-    workPermitDifficulty: "Moderate", costOfLivingUSD: 3200,
+    workPermitDifficulty: "Moderate",
+    costOfLiving: { budget: 2000, comfortable: 3200, luxury: 5500 },
     overview: "Singapore is ASEAN's most foreigner-friendly economy with a transparent EP/S-Pass system. High demand for skilled professionals, though the Fair Consideration Framework mandates local-first advertising.",
     recentPolicy: "EP salary threshold raised to SGD 5,000/month (SGD 5,500 for financial services) in 2023. Companies must post roles on MyCareersFuture for 28 days before hiring foreigners.",
+    remoteWork: {
+      rating: "Easy",
+      ratingScore: 85,
+      visaOption: "Tech.Pass — for established tech professionals. Allows freelancing and remote work for multiple companies. Also Entrepass for entrepreneurs.",
+      bestFor: "High-earning tech and finance professionals. World-class infrastructure and connectivity.",
+      restrictions: "Standard EP does not allow working for multiple employers. Tech.Pass is the cleanest remote/freelance option but has income requirements (SGD 22,500/month).",
+      internetSpeed: "Average 200+ Mbps. One of the world's fastest internet connections.",
+      coworkingCost: "$300–600/month in central Singapore",
+    },
     permitSteps: [
       { step: "Receive Employment Pass (EP) eligible job offer", docs: "Job offer letter, educational certificates", time: "Varies", cost: "—" },
       { step: "Employer submits EP application via EP Online", docs: "Passport, qualifications, employment contract", time: "3 weeks", cost: "SGD 105" },
@@ -48,9 +136,19 @@ const COUNTRIES = {
   Malaysia: {
     flag: "🇲🇾", capital: "Kuala Lumpur", currency: "MYR", language: "Bahasa Malaysia / English",
     economicScore: 72, foreignerFriendliness: 65, permitDifficultyScore: 55,
-    workPermitDifficulty: "Moderate", costOfLivingUSD: 900,
+    workPermitDifficulty: "Moderate",
+    costOfLiving: { budget: 600, comfortable: 900, luxury: 1800 },
     overview: "Malaysia offers accessible pathways for skilled foreigners, especially in MSC-status companies and financial services. The EP system is straightforward for professionals earning above MYR 5,000/month.",
     recentPolicy: "DE Rantau digital nomad visa launched 2022. Malaysia Tech Entrepreneur Programme expanded. MSC-status companies enjoy streamlined hiring processes for foreign talent.",
+    remoteWork: {
+      rating: "Easy",
+      ratingScore: 80,
+      visaOption: "DE Rantau Digital Nomad Visa — launched 2022, valid 12 months (renewable). Requires proof of employment/income from outside Malaysia. Min income $24,000/year.",
+      bestFor: "Digital nomads and remote workers. Low cost of living, English widely spoken, strong expat community in KL.",
+      restrictions: "DE Rantau holders cannot work for Malaysian companies or clients. Must maintain foreign income source.",
+      internetSpeed: "Average 50–100 Mbps in KL. Good connectivity in major cities.",
+      coworkingCost: "$80–180/month in Kuala Lumpur",
+    },
     permitSteps: [
       { step: "Secure job offer from Malaysian employer", docs: "Job offer letter", time: "Varies", cost: "—" },
       { step: "Employer obtains expatriate post approval from MDEC/TalentCorp", docs: "Company registration, job justification", time: "2–4 weeks", cost: "MYR 500–1,500" },
@@ -69,9 +167,19 @@ const COUNTRIES = {
   Thailand: {
     flag: "🇹🇭", capital: "Bangkok", currency: "THB", language: "Thai",
     economicScore: 68, foreignerFriendliness: 60, permitDifficultyScore: 62,
-    workPermitDifficulty: "Moderate-High", costOfLivingUSD: 1000,
+    workPermitDifficulty: "Moderate-High",
+    costOfLiving: { budget: 600, comfortable: 1000, luxury: 2200 },
     overview: "Thailand requires Non-Immigrant B visa + work permit via employer sponsorship. Must prove no qualified Thai can fill the role. LTR visa (2022) now offers 10-year residency for high earners.",
     recentPolicy: "LTR (Long Term Resident) visa introduced 2022 allows 10-year stay for high-income earners and skilled professionals. BOI-promoted companies have significantly streamlined work permit processes.",
+    remoteWork: {
+      rating: "Moderate",
+      ratingScore: 65,
+      visaOption: "LTR Visa (Long Term Resident) — 10-year visa for high earners ($80K+/year income). Also SMART Visa for tech professionals. Standard tourist visa used by most nomads (90 days, border runs needed).",
+      bestFor: "Chiang Mai and Phuket are ASEAN's top digital nomad hubs. Very affordable, large English-speaking expat community.",
+      restrictions: "Working for Thai companies without a work permit is illegal. LTR requires high income proof. Most nomads use tourist visa with periodic exits.",
+      internetSpeed: "Average 50–80 Mbps in Bangkok and Chiang Mai. Good in major cities.",
+      coworkingCost: "$60–150/month in Chiang Mai, $100–200/month in Bangkok",
+    },
     permitSteps: [
       { step: "Obtain Non-Immigrant B visa from Thai embassy", docs: "Passport, job offer, company docs", time: "1–2 weeks", cost: "$50–80" },
       { step: "Enter Thailand and apply for work permit at Department of Employment", docs: "Visa, passport, 3 photos, health certificate", time: "1 week", cost: "THB 750–3,000" },
@@ -94,10 +202,17 @@ const SECTOR_ICONS = { "Education & Teaching": "📚", "Hospitality & Tourism": 
 const EXPERIENCE_LEVELS = ["entry", "mid", "senior"];
 const EXPERIENCE_LABELS = { entry: "Entry Level (0–2 yrs)", mid: "Mid Level (3–6 yrs)", senior: "Senior Level (7+ yrs)" };
 
-// ── HELPERS ──────────────────────────────────────────────────────────────────
+// ── HELPERS ───────────────────────────────────────────────────────────────────
 
 const scoreColor = (score) => score >= 75 ? "#00e5a0" : score >= 50 ? "#f5c842" : "#ff6b6b";
 const accessColor = (a) => a === "Easy" ? "#00e5a0" : a === "Moderate" ? "#f5c842" : "#ff6b6b";
+
+const fmt = (usd, currency) => {
+  const { symbol, rate } = CURRENCIES[currency];
+  const val = Math.round(usd * rate);
+  if (rate >= 1000) return `${symbol}${(val / 1000).toFixed(0)}K`;
+  return `${symbol}${val.toLocaleString()}`;
+};
 
 const ScoreBar = ({ score, color }) => (
   <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 6, height: 7, overflow: "hidden" }}>
@@ -109,51 +224,135 @@ const Badge = ({ label, color }) => (
   <span style={{ display: "inline-block", padding: "3px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: `${color}22`, color, border: `1px solid ${color}44` }}>{label}</span>
 );
 
-// ── STYLES ───────────────────────────────────────────────────────────────────
+// ── STYLES ────────────────────────────────────────────────────────────────────
 
 const S = {
   app: { minHeight: "100vh", background: "#080c18", color: "#dde1ee", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", backgroundImage: "radial-gradient(ellipse 60% 40% at 15% 15%, rgba(0,200,130,0.06) 0%, transparent 70%), radial-gradient(ellipse 50% 50% at 85% 85%, rgba(60,100,255,0.06) 0%, transparent 70%)" },
-  header: { borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "18px 40px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(8,12,24,0.97)", backdropFilter: "blur(24px)", position: "sticky", top: 0, zIndex: 100 },
+  header: { borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(8,12,24,0.97)", backdropFilter: "blur(24px)", position: "sticky", top: 0, zIndex: 100, flexWrap: "wrap", gap: 10 },
   logo: { fontSize: 20, fontWeight: 900, letterSpacing: "-0.5px", color: "#fff" },
-  nav: { display: "flex", gap: 8 },
-  navBtn: (active) => ({ background: active ? "rgba(0,229,160,0.12)" : "transparent", border: `1px solid ${active ? "rgba(0,229,160,0.35)" : "rgba(255,255,255,0.08)"}`, color: active ? "#00e5a0" : "rgba(255,255,255,0.5)", padding: "8px 18px", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.2s" }),
-  hero: { padding: "70px 40px 50px", maxWidth: 860, margin: "0 auto", textAlign: "center" },
-  heroTitle: { fontSize: 50, fontWeight: 900, lineHeight: 1.08, marginBottom: 16, letterSpacing: "-2px", background: "linear-gradient(135deg,#fff 0%,#00e5a0 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" },
-  heroSub: { fontSize: 17, color: "rgba(255,255,255,0.45)", maxWidth: 560, margin: "0 auto 40px", lineHeight: 1.75 },
-  statsBanner: { display: "flex", justifyContent: "center", gap: 40, flexWrap: "wrap", padding: "24px 40px", borderTop: "1px solid rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,229,160,0.03)", marginBottom: 0 },
+  nav: { display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" },
+  navBtn: (active) => ({ background: active ? "rgba(0,229,160,0.12)" : "transparent", border: `1px solid ${active ? "rgba(0,229,160,0.35)" : "rgba(255,255,255,0.08)"}`, color: active ? "#00e5a0" : "rgba(255,255,255,0.5)", padding: "7px 14px", borderRadius: 10, cursor: "pointer", fontSize: 12, fontWeight: 600, transition: "all 0.2s" }),
+  currencySelect: { background: "rgba(0,229,160,0.08)", border: "1px solid rgba(0,229,160,0.25)", color: "#00e5a0", padding: "7px 12px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", outline: "none", fontFamily: "inherit" },
+  hero: { padding: "60px 24px 40px", maxWidth: 860, margin: "0 auto", textAlign: "center" },
+  heroTitle: { fontSize: "clamp(32px, 6vw, 50px)", fontWeight: 900, lineHeight: 1.08, marginBottom: 16, letterSpacing: "-2px", background: "linear-gradient(135deg,#fff 0%,#00e5a0 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" },
+  heroSub: { fontSize: 16, color: "rgba(255,255,255,0.45)", maxWidth: 560, margin: "0 auto 40px", lineHeight: 1.75 },
+  statsBanner: { display: "flex", justifyContent: "center", gap: 28, flexWrap: "wrap", padding: "20px 24px", borderTop: "1px solid rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,229,160,0.03)" },
   statItem: { textAlign: "center" },
-  statNum: { fontSize: 28, fontWeight: 900, color: "#00e5a0", letterSpacing: "-1px" },
-  statLabel: { fontSize: 12, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: 1.5, marginTop: 2 },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px,1fr))", gap: 14, maxWidth: 880, margin: "0 auto", padding: "48px 40px 80px" },
-  card: (hov) => ({ background: hov ? "rgba(0,229,160,0.07)" : "rgba(255,255,255,0.03)", border: `1px solid ${hov ? "rgba(0,229,160,0.28)" : "rgba(255,255,255,0.07)"}`, borderRadius: 16, padding: 26, cursor: "pointer", transition: "all 0.2s", transform: hov ? "translateY(-4px)" : "none" }),
-  section: { maxWidth: 980, margin: "0 auto", padding: "36px 40px 80px" },
-  backBtn: { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.6)", padding: "9px 18px", borderRadius: 10, cursor: "pointer", fontSize: 13, marginBottom: 28, display: "inline-flex", alignItems: "center", gap: 6 },
-  infoGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginBottom: 32 },
-  infoCard: { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 22 },
+  statNum: { fontSize: 26, fontWeight: 900, color: "#00e5a0", letterSpacing: "-1px" },
+  statLabel: { fontSize: 11, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: 1.5, marginTop: 2 },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px,1fr))", gap: 14, maxWidth: 880, margin: "0 auto", padding: "40px 24px 60px" },
+  card: (hov) => ({ background: hov ? "rgba(0,229,160,0.07)" : "rgba(255,255,255,0.03)", border: `1px solid ${hov ? "rgba(0,229,160,0.28)" : "rgba(255,255,255,0.07)"}`, borderRadius: 16, padding: 22, cursor: "pointer", transition: "all 0.2s", transform: hov ? "translateY(-4px)" : "none" }),
+  section: { maxWidth: 980, margin: "0 auto", padding: "30px 24px 60px" },
+  backBtn: { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.6)", padding: "9px 18px", borderRadius: 10, cursor: "pointer", fontSize: 13, marginBottom: 24, display: "inline-flex", alignItems: "center", gap: 6 },
+  infoGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 28 },
+  infoCard: { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: 20 },
   label: { fontSize: 11, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 },
-  overviewBox: { background: "rgba(0,229,160,0.04)", border: "1px solid rgba(0,229,160,0.13)", borderRadius: 14, padding: 22, marginBottom: 28 },
-  policyBox: { background: "rgba(80,120,255,0.04)", border: "1px solid rgba(80,120,255,0.13)", borderRadius: 14, padding: 20, marginBottom: 32 },
-  sectorGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 32 },
-  sectorCard: (hov) => ({ background: hov ? "rgba(0,229,160,0.07)" : "rgba(255,255,255,0.03)", border: `1px solid ${hov ? "rgba(0,229,160,0.25)" : "rgba(255,255,255,0.06)"}`, borderRadius: 14, padding: 20, cursor: "pointer", transition: "all 0.2s", transform: hov ? "translateY(-3px)" : "none" }),
+  overviewBox: { background: "rgba(0,229,160,0.04)", border: "1px solid rgba(0,229,160,0.13)", borderRadius: 14, padding: 20, marginBottom: 24 },
+  policyBox: { background: "rgba(80,120,255,0.04)", border: "1px solid rgba(80,120,255,0.13)", borderRadius: 14, padding: 18, marginBottom: 28 },
+  sectorGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 28 },
+  sectorCard: (hov) => ({ background: hov ? "rgba(0,229,160,0.07)" : "rgba(255,255,255,0.03)", border: `1px solid ${hov ? "rgba(0,229,160,0.25)" : "rgba(255,255,255,0.06)"}`, borderRadius: 14, padding: 18, cursor: "pointer", transition: "all 0.2s", transform: hov ? "translateY(-3px)" : "none" }),
   notesBox: { background: "rgba(255,255,255,0.02)", borderLeft: "3px solid #00e5a0", padding: "14px 18px", borderRadius: "0 10px 10px 0", fontSize: 14, lineHeight: 1.7, color: "rgba(255,255,255,0.6)", marginBottom: 22 },
   jobLinkRow: { display: "flex", gap: 10, flexWrap: "wrap" },
   jobLink: { background: "rgba(0,229,160,0.1)", border: "1px solid rgba(0,229,160,0.25)", color: "#00e5a0", padding: "9px 18px", borderRadius: 10, textDecoration: "none", fontSize: 13, fontWeight: 700 },
-  permitStep: { display: "flex", gap: 16, marginBottom: 16, alignItems: "flex-start" },
-  stepNum: { minWidth: 28, height: 28, borderRadius: "50%", background: "rgba(0,229,160,0.15)", border: "1px solid rgba(0,229,160,0.3)", color: "#00e5a0", fontSize: 13, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" },
-  tabRow: { display: "flex", gap: 8, marginBottom: 28, flexWrap: "wrap" },
-  tab: (active) => ({ background: active ? "rgba(0,229,160,0.12)" : "rgba(255,255,255,0.04)", border: `1px solid ${active ? "rgba(0,229,160,0.35)" : "rgba(255,255,255,0.08)"}`, color: active ? "#00e5a0" : "rgba(255,255,255,0.5)", padding: "8px 16px", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600 }),
-  input: { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "12px 16px", borderRadius: 12, fontSize: 14, width: "100%", outline: "none", fontFamily: "inherit" },
-  select: { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "12px 16px", borderRadius: 12, fontSize: 14, width: "100%", outline: "none", fontFamily: "inherit", cursor: "pointer" },
-  row: { display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 },
-  col: { flex: 1, minWidth: 180 },
-  sectionTitle: { fontSize: 20, fontWeight: 800, marginBottom: 20, letterSpacing: "-0.5px" },
-  divider: { borderTop: "1px solid rgba(255,255,255,0.06)", margin: "36px 0" },
-  footer: { borderTop: "1px solid rgba(255,255,255,0.05)", padding: "20px 40px", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.18)" },
+  tabRow: { display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" },
+  tab: (active) => ({ background: active ? "rgba(0,229,160,0.12)" : "rgba(255,255,255,0.04)", border: `1px solid ${active ? "rgba(0,229,160,0.35)" : "rgba(255,255,255,0.08)"}`, color: active ? "#00e5a0" : "rgba(255,255,255,0.5)", padding: "8px 14px", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600 }),
+  input: { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "12px 16px", borderRadius: 12, fontSize: 14, width: "100%", outline: "none", fontFamily: "inherit", boxSizing: "border-box" },
+  select: { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "12px 16px", borderRadius: 12, fontSize: 14, width: "100%", outline: "none", fontFamily: "inherit", cursor: "pointer", boxSizing: "border-box" },
+  row: { display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 18 },
+  col: { flex: 1, minWidth: 160 },
+  sectionTitle: { fontSize: 20, fontWeight: 800, marginBottom: 18, letterSpacing: "-0.5px" },
+  divider: { borderTop: "1px solid rgba(255,255,255,0.06)", margin: "32px 0" },
+  footer: { borderTop: "1px solid rgba(255,255,255,0.05)", padding: "20px 24px", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.18)" },
+  remoteBox: { background: "rgba(60,100,255,0.04)", border: "1px solid rgba(60,100,255,0.15)", borderRadius: 14, padding: 22, marginBottom: 28 },
+  taxBox: { background: "rgba(245,200,66,0.04)", border: "1px solid rgba(245,200,66,0.15)", borderRadius: 14, padding: 20, marginTop: 16 },
 };
 
-// ── FEATURE: SALARY CALCULATOR ───────────────────────────────────────────────
+// ── COL TIERS DISPLAY ─────────────────────────────────────────────────────────
 
-function SalaryCalculator() {
+function ColTiers({ col, currency }) {
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+      {[["Budget", col.budget, "#00e5a0"], ["Comfortable", col.comfortable, "#f5c842"], ["Luxury", col.luxury, "#ff6b6b"]].map(([label, val, color]) => (
+        <div key={label} style={{ flex: 1, minWidth: 80, background: `${color}10`, border: `1px solid ${color}25`, borderRadius: 10, padding: "8px 12px", textAlign: "center" }}>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>{label}</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color }}>{fmt(val, currency)}/mo</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── TAX ESTIMATOR ─────────────────────────────────────────────────────────────
+
+function TaxEstimator({ grossUSD, countryName, currency }) {
+  const { tax, rate, net } = calcTax(grossUSD, countryName);
+  const note = TAX_BRACKETS[countryName]?.note;
+  return (
+    <div style={S.taxBox}>
+      <div style={{ fontSize: 11, color: "#f5c842", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 14 }}>🧾 Estimated Tax Breakdown</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 12, marginBottom: 14 }}>
+        <div style={S.infoCard}>
+          <div style={S.label}>Gross Salary</div>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>{fmt(grossUSD, currency)}/mo</div>
+        </div>
+        <div style={S.infoCard}>
+          <div style={S.label}>Est. Income Tax (~{rate}%)</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#ff6b6b" }}>-{fmt(tax, currency)}/mo</div>
+        </div>
+        <div style={{ ...S.infoCard, background: "rgba(0,229,160,0.05)", border: "1px solid rgba(0,229,160,0.15)" }}>
+          <div style={S.label}>Est. Take-Home Pay</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#00e5a0" }}>{fmt(net, currency)}/mo</div>
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", lineHeight: 1.65, marginBottom: 6 }}>{note}</div>
+      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontStyle: "italic" }}>⚠️ Estimates only. Not financial or legal advice. Consult a tax professional for accurate figures.</div>
+    </div>
+  );
+}
+
+// ── REMOTE WORK SECTION ───────────────────────────────────────────────────────
+
+function RemoteWorkSection({ countryName }) {
+  const rw = COUNTRIES[countryName].remoteWork;
+  const ratingColor = rw.rating === "Easy" ? "#00e5a0" : rw.rating === "Moderate" ? "#f5c842" : "#ff6b6b";
+  return (
+    <div style={S.remoteBox}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ fontSize: 16, fontWeight: 800 }}>💻 Remote Work Friendliness</div>
+        <Badge label={rw.rating} color={ratingColor} />
+      </div>
+      <ScoreBar score={rw.ratingScore} color={ratingColor} />
+      <div style={{ marginTop: 18, display: "grid", gap: 12 }}>
+        <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1.3, marginBottom: 6 }}>Visa Option</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.65 }}>{rw.visaOption}</div>
+        </div>
+        <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1.3, marginBottom: 6 }}>Best For</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.65 }}>{rw.bestFor}</div>
+        </div>
+        <div style={{ background: "rgba(255,107,107,0.04)", border: "1px solid rgba(255,107,107,0.12)", borderRadius: 10, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, color: "rgba(255,107,107,0.7)", textTransform: "uppercase", letterSpacing: 1.3, marginBottom: 6 }}>Restrictions</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.65 }}>{rw.restrictions}</div>
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 140, background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: "12px 16px" }}>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1.3, marginBottom: 4 }}>📶 Internet Speed</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}>{rw.internetSpeed}</div>
+          </div>
+          <div style={{ flex: 1, minWidth: 140, background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: "12px 16px" }}>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1.3, marginBottom: 4 }}>🏢 Coworking Cost</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}>{rw.coworkingCost}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── SALARY CALCULATOR ─────────────────────────────────────────────────────────
+
+function SalaryCalculator({ currency }) {
   const [salary, setSalary] = useState("");
   const [country, setCountry] = useState("Singapore");
   const [result, setResult] = useState(null);
@@ -161,16 +360,16 @@ function SalaryCalculator() {
   const calculate = () => {
     const s = parseFloat(salary);
     if (!s || s <= 0) return;
-    const col = COUNTRIES[country].costOfLivingUSD;
+    const col = COUNTRIES[country].costOfLiving.comfortable;
     const buffer = s - col;
     const ratio = ((s / col) * 100).toFixed(0);
-    setResult({ col, buffer, ratio, comfortable: buffer > 500 });
+    setResult({ col, buffer, ratio, comfortable: buffer > 500, grossUSD: s });
   };
 
   return (
     <div>
       <div style={S.sectionTitle}>💰 Salary Purchasing Power Calculator</div>
-      <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", marginBottom: 24, lineHeight: 1.6 }}>Enter a salary offer to see what it actually means after cost of living in your target country.</p>
+      <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", marginBottom: 20, lineHeight: 1.6 }}>Enter a salary offer (in USD) to see real purchasing power after cost of living.</p>
       <div style={S.row}>
         <div style={S.col}>
           <div style={S.label}>Monthly Salary Offer (USD)</div>
@@ -186,35 +385,36 @@ function SalaryCalculator() {
       <button onClick={calculate} style={{ background: "#00e5a0", color: "#080c18", border: "none", padding: "12px 28px", borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", marginBottom: 24 }}>Calculate →</button>
 
       {result && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
-          <div style={{ ...S.infoCard, background: "rgba(0,229,160,0.05)", border: "1px solid rgba(0,229,160,0.15)" }}>
-            <div style={S.label}>Your Monthly Salary</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: "#00e5a0" }}>${parseFloat(salary).toLocaleString()}</div>
+        <>
+          <div style={{ marginBottom: 16 }}>
+            <div style={S.label}>Cost of Living Tiers — {country}</div>
+            <ColTiers col={COUNTRIES[country].costOfLiving} currency={currency} />
           </div>
-          <div style={S.infoCard}>
-            <div style={S.label}>Est. Cost of Living in {country}</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: "#f5c842" }}>${result.col.toLocaleString()}</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>monthly estimate · {COUNTRIES[country].capital}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 16 }}>
+            <div style={{ ...S.infoCard, background: "rgba(0,229,160,0.05)", border: "1px solid rgba(0,229,160,0.15)" }}>
+              <div style={S.label}>Your Salary</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: "#00e5a0" }}>{fmt(result.grossUSD, currency)}</div>
+            </div>
+            <div style={S.infoCard}>
+              <div style={S.label}>Comfortable COL</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: "#f5c842" }}>{fmt(result.col, currency)}</div>
+            </div>
+            <div style={{ ...S.infoCard, background: result.comfortable ? "rgba(0,229,160,0.05)" : "rgba(255,107,107,0.05)", border: `1px solid ${result.comfortable ? "rgba(0,229,160,0.2)" : "rgba(255,107,107,0.2)"}` }}>
+              <div style={S.label}>Net Buffer</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: result.comfortable ? "#00e5a0" : "#ff6b6b" }}>{fmt(result.buffer, currency)}</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>{result.comfortable ? "✓ Comfortable" : "⚠ Tight"}</div>
+            </div>
           </div>
-          <div style={{ ...S.infoCard, background: result.comfortable ? "rgba(0,229,160,0.05)" : "rgba(255,107,107,0.05)", border: `1px solid ${result.comfortable ? "rgba(0,229,160,0.2)" : "rgba(255,107,107,0.2)"}` }}>
-            <div style={S.label}>Monthly Net Buffer</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: result.comfortable ? "#00e5a0" : "#ff6b6b" }}>${result.buffer.toLocaleString()}</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>{result.comfortable ? "✓ Comfortable living" : "⚠ Tight budget"}</div>
-          </div>
-          <div style={S.infoCard}>
-            <div style={S.label}>Purchasing Power Ratio</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: scoreColor(parseInt(result.ratio) > 150 ? 80 : 40) }}>{result.ratio}%</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>of cost of living covered</div>
-          </div>
-        </div>
+          <TaxEstimator grossUSD={result.grossUSD} countryName={country} currency={currency} />
+        </>
       )}
     </div>
   );
 }
 
-// ── FEATURE: SUITABILITY SCORE ───────────────────────────────────────────────
+// ── SUITABILITY SCORE ─────────────────────────────────────────────────────────
 
-function SuitabilityScore() {
+function SuitabilityScore({ currency }) {
   const [sector, setSector] = useState("");
   const [experience, setExperience] = useState("");
   const [country, setCountry] = useState("");
@@ -228,7 +428,7 @@ function SuitabilityScore() {
     const baseScore = (s.demandScore * 0.4 + c.foreignerFriendliness * 0.35 + (100 - c.permitDifficultyScore) * 0.25) * expMultiplier;
     const score = Math.min(100, Math.round(baseScore));
     const salary = s.avgSalaryUSD[experience];
-    const buffer = salary - c.costOfLivingUSD;
+    const buffer = salary - c.costOfLiving.comfortable;
     setResult({ score, salary, buffer, access: s.foreignAccess, demand: s.demand, notes: s.notes });
   };
 
@@ -241,7 +441,7 @@ function SuitabilityScore() {
   return (
     <div>
       <div style={S.sectionTitle}>🎯 Foreigner Suitability Score</div>
-      <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", marginBottom: 24, lineHeight: 1.6 }}>Get a personalized score based on your sector, experience level, and target country.</p>
+      <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", marginBottom: 20, lineHeight: 1.6 }}>Get a personalized score based on your sector, experience level, and target country.</p>
       <div style={S.row}>
         <div style={S.col}>
           <div style={S.label}>Your Sector</div>
@@ -271,23 +471,24 @@ function SuitabilityScore() {
         const verdict = getVerdict(result.score);
         return (
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 24, background: `${verdict.color}10`, border: `1px solid ${verdict.color}25`, borderRadius: 16, padding: 24, marginBottom: 20, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 24, background: `${verdict.color}10`, border: `1px solid ${verdict.color}25`, borderRadius: 16, padding: 22, marginBottom: 18, flexWrap: "wrap" }}>
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 52, fontWeight: 900, color: verdict.color, lineHeight: 1 }}>{result.score}</div>
+                <div style={{ fontSize: 48, fontWeight: 900, color: verdict.color, lineHeight: 1 }}>{result.score}</div>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>/ 100</div>
               </div>
               <div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: verdict.color, marginBottom: 6 }}>{verdict.label}</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: verdict.color, marginBottom: 6 }}>{verdict.label}</div>
                 <div style={{ fontSize: 14, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, maxWidth: 480 }}>{verdict.desc}</div>
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 16 }}>
-              <div style={S.infoCard}><div style={S.label}>Avg Salary ({EXPERIENCE_LABELS[experience].split(" ")[0]})</div><div style={{ fontSize: 22, fontWeight: 800, color: "#00e5a0" }}>${result.salary.toLocaleString()}/mo</div></div>
-              <div style={S.infoCard}><div style={S.label}>Net Buffer After Living Costs</div><div style={{ fontSize: 22, fontWeight: 800, color: result.buffer > 0 ? "#00e5a0" : "#ff6b6b" }}>${result.buffer.toLocaleString()}/mo</div></div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 14 }}>
+              <div style={S.infoCard}><div style={S.label}>Avg Salary</div><div style={{ fontSize: 20, fontWeight: 800, color: "#00e5a0" }}>{fmt(result.salary, currency)}/mo</div></div>
+              <div style={S.infoCard}><div style={S.label}>Net Buffer (vs Comfortable COL)</div><div style={{ fontSize: 20, fontWeight: 800, color: result.buffer > 0 ? "#00e5a0" : "#ff6b6b" }}>{fmt(result.buffer, currency)}/mo</div></div>
               <div style={S.infoCard}><div style={S.label}>Foreign Access</div><Badge label={result.access} color={accessColor(result.access)} /></div>
               <div style={S.infoCard}><div style={S.label}>Market Demand</div><Badge label={result.demand} color={scoreColor(result.demand === "Very High" ? 90 : result.demand === "High" ? 78 : result.demand === "Moderate" ? 55 : 30)} /></div>
             </div>
             <div style={S.notesBox}>{result.notes}</div>
+            {country && <TaxEstimator grossUSD={result.salary} countryName={country} currency={currency} />}
           </div>
         );
       })()}
@@ -295,9 +496,9 @@ function SuitabilityScore() {
   );
 }
 
-// ── FEATURE: COUNTRY COMPARISON ──────────────────────────────────────────────
+// ── COUNTRY COMPARISON ────────────────────────────────────────────────────────
 
-function CountryComparison() {
+function CountryComparison({ currency }) {
   const [c1, setC1] = useState("Singapore");
   const [c2, setC2] = useState("Malaysia");
   const [sector, setSector] = useState("Finance & Banking");
@@ -310,10 +511,10 @@ function CountryComparison() {
     const win1 = higher ? v1 > v2 : v1 < v2;
     const win2 = higher ? v2 > v1 : v2 < v1;
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-        <div style={{ textAlign: "right", fontWeight: win1 ? 700 : 400, color: win1 ? "#00e5a0" : "rgba(255,255,255,0.6)", fontSize: 14 }}>{format ? format(v1) : v1}{win1 ? " ✓" : ""}</div>
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, textAlign: "center", whiteSpace: "nowrap" }}>{label}</div>
-        <div style={{ fontWeight: win2 ? 700 : 400, color: win2 ? "#00e5a0" : "rgba(255,255,255,0.6)", fontSize: 14 }}>{win2 ? "✓ " : ""}{format ? format(v2) : v2}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 10, alignItems: "center", padding: "11px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+        <div style={{ textAlign: "right", fontWeight: win1 ? 700 : 400, color: win1 ? "#00e5a0" : "rgba(255,255,255,0.6)", fontSize: 13 }}>{format ? format(v1) : v1}{win1 ? " ✓" : ""}</div>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, textAlign: "center", whiteSpace: "nowrap" }}>{label}</div>
+        <div style={{ fontWeight: win2 ? 700 : 400, color: win2 ? "#00e5a0" : "rgba(255,255,255,0.6)", fontSize: 13 }}>{win2 ? "✓ " : ""}{format ? format(v2) : v2}</div>
       </div>
     );
   };
@@ -321,67 +522,55 @@ function CountryComparison() {
   return (
     <div>
       <div style={S.sectionTitle}>⚖️ Country Comparison</div>
-      <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", marginBottom: 24, lineHeight: 1.6 }}>Compare two countries side by side across key metrics for foreign workers.</p>
       <div style={S.row}>
         <div style={S.col}><div style={S.label}>Country A</div><select style={S.select} value={c1} onChange={e => setC1(e.target.value)}>{Object.keys(COUNTRIES).map(c => <option key={c} value={c}>{COUNTRIES[c].flag} {c}</option>)}</select></div>
         <div style={S.col}><div style={S.label}>Country B</div><select style={S.select} value={c2} onChange={e => setC2(e.target.value)}>{Object.keys(COUNTRIES).map(c => <option key={c} value={c}>{COUNTRIES[c].flag} {c}</option>)}</select></div>
         <div style={S.col}><div style={S.label}>Sector</div><select style={S.select} value={sector} onChange={e => setSector(e.target.value)}>{SECTORS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
         <div style={S.col}><div style={S.label}>Experience</div><select style={S.select} value={exp} onChange={e => setExp(e.target.value)}>{EXPERIENCE_LEVELS.map(l => <option key={l} value={l}>{EXPERIENCE_LABELS[l]}</option>)}</select></div>
       </div>
-
-      <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: 28 }}>
-        {/* Country headers */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, marginBottom: 20 }}>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 36 }}>{d1.flag}</div>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>{c1}</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", color: "rgba(255,255,255,0.2)", fontSize: 20, fontWeight: 300 }}>vs</div>
-          <div>
-            <div style={{ fontSize: 36 }}>{d2.flag}</div>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>{c2}</div>
-          </div>
+      <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, marginBottom: 18 }}>
+          <div style={{ textAlign: "right" }}><div style={{ fontSize: 32 }}>{d1.flag}</div><div style={{ fontSize: 16, fontWeight: 800 }}>{c1}</div></div>
+          <div style={{ display: "flex", alignItems: "center", color: "rgba(255,255,255,0.2)", fontSize: 18 }}>vs</div>
+          <div><div style={{ fontSize: 32 }}>{d2.flag}</div><div style={{ fontSize: 16, fontWeight: 800 }}>{c2}</div></div>
         </div>
-
         <Row label="Foreigner Friendliness" v1={d1.foreignerFriendliness} v2={d2.foreignerFriendliness} higher format={v => `${v}/100`} />
         <Row label="Economic Score" v1={d1.economicScore} v2={d2.economicScore} higher format={v => `${v}/100`} />
-        <Row label="Work Permit Difficulty" v1={d1.permitDifficultyScore} v2={d2.permitDifficultyScore} format={v => d1.workPermitDifficulty} />
-        <Row label="Cost of Living / mo" v1={d1.costOfLivingUSD} v2={d2.costOfLivingUSD} format={v => `$${v.toLocaleString()}`} />
-        <Row label={`${sector} Salary (${exp})`} v1={s1.avgSalaryUSD[exp]} v2={s2.avgSalaryUSD[exp]} higher format={v => `$${v.toLocaleString()}/mo`} />
-        <Row label="Net Salary Buffer" v1={s1.avgSalaryUSD[exp] - d1.costOfLivingUSD} v2={s2.avgSalaryUSD[exp] - d2.costOfLivingUSD} higher format={v => `$${v.toLocaleString()}/mo`} />
-        <Row label={`${SECTOR_ICONS[sector]} Demand Score`} v1={s1.demandScore} v2={s2.demandScore} higher format={v => `${v}/100`} />
-        <Row label="Foreign Access" v1={s1.foreignAccess} v2={s2.foreignAccess} format={v => v} />
+        <Row label="Permit Difficulty" v1={d1.permitDifficultyScore} v2={d2.permitDifficultyScore} format={() => `${d1.workPermitDifficulty} vs ${d2.workPermitDifficulty}`} />
+        <Row label="COL (Comfortable)" v1={d1.costOfLiving.comfortable} v2={d2.costOfLiving.comfortable} format={v => `${fmt(v, currency)}/mo`} />
+        <Row label={`${sector} Salary (${exp})`} v1={s1.avgSalaryUSD[exp]} v2={s2.avgSalaryUSD[exp]} higher format={v => `${fmt(v, currency)}/mo`} />
+        <Row label="Net Buffer" v1={s1.avgSalaryUSD[exp] - d1.costOfLiving.comfortable} v2={s2.avgSalaryUSD[exp] - d2.costOfLiving.comfortable} higher format={v => `${fmt(v, currency)}/mo`} />
+        <Row label="Demand Score" v1={s1.demandScore} v2={s2.demandScore} higher format={v => `${v}/100`} />
+        <Row label="Remote Work" v1={COUNTRIES[c1].remoteWork.ratingScore} v2={COUNTRIES[c2].remoteWork.ratingScore} higher format={(v) => v === COUNTRIES[c1].remoteWork.ratingScore ? COUNTRIES[c1].remoteWork.rating : COUNTRIES[c2].remoteWork.rating} />
       </div>
     </div>
   );
 }
 
-// ── FEATURE: PERMIT GUIDE ─────────────────────────────────────────────────────
+// ── PERMIT GUIDE ──────────────────────────────────────────────────────────────
 
 function PermitGuide({ country }) {
   const c = COUNTRIES[country];
   const [checked, setChecked] = useState({});
   const toggle = (i) => setChecked(p => ({ ...p, [i]: !p[i] }));
   const done = Object.values(checked).filter(Boolean).length;
-
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-        <div style={S.sectionTitle}>📋 Work Permit Guide — {c.flag} {country}</div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>{done}/{c.permitSteps.length} steps completed</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
+        <div style={S.sectionTitle}>📋 Work Permit Checklist — {c.flag} {country}</div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>{done}/{c.permitSteps.length} completed</div>
       </div>
-      <div style={{ background: "rgba(0,229,160,0.04)", border: "1px solid rgba(0,229,160,0.1)", borderRadius: 12, padding: "6px 16px", marginBottom: 24 }}>
+      <div style={{ background: "rgba(0,229,160,0.04)", border: "1px solid rgba(0,229,160,0.1)", borderRadius: 12, padding: "6px 16px", marginBottom: 20 }}>
         <ScoreBar score={(done / c.permitSteps.length) * 100} color="#00e5a0" />
       </div>
-
       {c.permitSteps.map((step, i) => (
-        <div key={i} onClick={() => toggle(i)} style={{ display: "flex", gap: 16, padding: "16px 20px", background: checked[i] ? "rgba(0,229,160,0.04)" : "rgba(255,255,255,0.02)", border: `1px solid ${checked[i] ? "rgba(0,229,160,0.2)" : "rgba(255,255,255,0.06)"}`, borderRadius: 12, marginBottom: 10, cursor: "pointer", transition: "all 0.2s" }}>
-          <div style={{ minWidth: 26, height: 26, borderRadius: "50%", background: checked[i] ? "#00e5a0" : "rgba(255,255,255,0.07)", border: `1px solid ${checked[i] ? "#00e5a0" : "rgba(255,255,255,0.12)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: checked[i] ? "#080c18" : "rgba(255,255,255,0.4)", marginTop: 2 }}>
+        <div key={i} onClick={() => toggle(i)} style={{ display: "flex", gap: 14, padding: "14px 18px", background: checked[i] ? "rgba(0,229,160,0.04)" : "rgba(255,255,255,0.02)", border: `1px solid ${checked[i] ? "rgba(0,229,160,0.2)" : "rgba(255,255,255,0.06)"}`, borderRadius: 12, marginBottom: 8, cursor: "pointer", transition: "all 0.2s" }}>
+          <div style={{ minWidth: 26, height: 26, borderRadius: "50%", background: checked[i] ? "#00e5a0" : "rgba(255,255,255,0.07)", border: `1px solid ${checked[i] ? "#00e5a0" : "rgba(255,255,255,0.12)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: checked[i] ? "#080c18" : "rgba(255,255,255,0.4)", marginTop: 1, flexShrink: 0 }}>
             {checked[i] ? "✓" : i + 1}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: checked[i] ? "rgba(255,255,255,0.5)" : "#fff", textDecoration: checked[i] ? "line-through" : "none", marginBottom: 6 }}>{step.step}</div>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: checked[i] ? "rgba(255,255,255,0.4)" : "#fff", textDecoration: checked[i] ? "line-through" : "none", marginBottom: 5 }}>{step.step}</div>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
               <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>📄 {step.docs}</span>
               <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>⏱ {step.time}</span>
               <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>💵 {step.cost}</span>
@@ -393,230 +582,86 @@ function PermitGuide({ country }) {
   );
 }
 
-// ── FEATURE: METHODOLOGY PAGE ────────────────────────────────────────────────
+// ── METHODOLOGY PAGE ──────────────────────────────────────────────────────────
 
 const METRICS = [
-  {
-    icon: "🌏",
-    name: "Foreigner Friendliness Score",
-    score_range: "0 – 100",
-    description: "A composite index measuring how accessible and welcoming a country's labor market is to foreign workers. Higher scores mean fewer barriers, more transparent processes, and stronger legal protections for expats.",
-    formula: [
-      { factor: "World Bank Ease of Doing Business Index", weight: "40%", why: "Countries that are easier to do business in generally have more streamlined hiring processes for foreigners." },
-      { factor: "ILO Foreign Labor Participation Rate", weight: "35%", why: "Measures the actual proportion of foreign workers in the national workforce — a direct signal of real-world access." },
-      { factor: "Work Permit Processing Transparency", weight: "25%", why: "Assessed from each country's official immigration authority — clarity of requirements, online availability, and average processing predictability." },
-    ],
-    sources: [
-      { name: "World Bank Ease of Doing Business", url: "https://www.worldbank.org/en/programs/business-enabling-environment" },
-      { name: "ILO Labour Statistics Database (ILOSTAT)", url: "https://ilostat.ilo.org" },
-      { name: "Singapore Ministry of Manpower (MOM)", url: "https://www.mom.gov.sg" },
-      { name: "Indonesia DGCE Immigration", url: "https://www.imigrasi.go.id" },
-      { name: "Malaysia Immigration Department", url: "https://www.imi.gov.my" },
-      { name: "Thailand Department of Employment", url: "https://www.doe.go.th" },
-    ],
-    caveat: "Scores are point-in-time estimates and reflect policy environments as of 2023–2024. Immigration policies change frequently — always verify with official government sources before making decisions."
-  },
-  {
-    icon: "📈",
-    name: "Economic Health Score",
-    score_range: "0 – 100",
-    description: "Measures the overall economic strength and stability of a country, which directly affects job availability, salary levels, and long-term career prospects for foreign workers.",
-    formula: [
-      { factor: "GDP Growth Rate (3-year average)", weight: "40%", why: "Sustained GDP growth signals expanding job markets and increasing demand for skilled workers." },
-      { factor: "Unemployment Rate (inverted)", weight: "35%", why: "Lower unemployment generally means a tighter labor market with better conditions for skilled foreign hires." },
-      { factor: "Foreign Direct Investment (FDI) Inflow", weight: "25%", why: "High FDI indicates multinational activity — the primary employers of foreign professionals in ASEAN." },
-    ],
-    sources: [
-      { name: "World Bank Open Data — GDP & Unemployment", url: "https://data.worldbank.org" },
-      { name: "ASEAN Stats — FDI Statistics", url: "https://www.aseanstats.org" },
-      { name: "IMF World Economic Outlook Database", url: "https://www.imf.org/en/Publications/WEO" },
-    ],
-    caveat: "Economic conditions are dynamic. Figures reflect 2022–2024 averages. Recession, currency fluctuations, or policy shifts can significantly alter scores."
-  },
-  {
-    icon: "💵",
-    name: "Cost of Living Estimate",
-    score_range: "USD / month",
-    description: "Monthly living cost estimate for a single professional in the country's capital city, covering rent (1-bedroom city center), food, transport, utilities, and basic leisure.",
-    formula: [
-      { factor: "Numbeo Cost of Living Index", weight: "50%", why: "Largest crowd-sourced cost of living database globally, updated regularly with real user submissions." },
-      { factor: "Expatistan Expat Cost Data", weight: "30%", why: "Focuses specifically on expat spending patterns, which differ from local averages." },
-      { factor: "Local government CPI data", weight: "20%", why: "Consumer Price Index from national statistics agencies provides official baseline." },
-    ],
-    sources: [
-      { name: "Numbeo Cost of Living", url: "https://www.numbeo.com/cost-of-living/" },
-      { name: "Expatistan Cost of Living Comparison", url: "https://www.expatistan.com/cost-of-living" },
-      { name: "Indonesia BPS (National Statistics)", url: "https://www.bps.go.id" },
-      { name: "Singapore Department of Statistics", url: "https://www.singstat.gov.sg" },
-      { name: "Malaysia DOSM Statistics", url: "https://www.dosm.gov.my" },
-      { name: "Thailand NESDC", url: "https://www.nesdc.go.th" },
-    ],
-    caveat: "Estimates assume a mid-range lifestyle in the capital city. Costs vary significantly by neighborhood, lifestyle, and family size. Bali (Indonesia) and Chiang Mai (Thailand) can be 30–40% cheaper than the capital."
-  },
-  {
-    icon: "📊",
-    name: "Sector Demand Score",
-    score_range: "0 – 100",
-    description: "Measures how actively employers in a given country are hiring foreign workers within a specific job sector. Combines job posting volume with foreigner-specific hiring signals.",
-    formula: [
-      { factor: "Job posting volume on JobStreet & LinkedIn", weight: "45%", why: "Raw volume of active postings in the sector serves as a direct proxy for market demand." },
-      { factor: "ILO Sectoral Employment Reports", weight: "35%", why: "Official labor statistics showing employment trends and projected growth by sector." },
-      { factor: "Foreign worker concentration in sector", weight: "20%", why: "Sectors with historically higher foreign worker ratios signal established pathways for expat hiring." },
-    ],
-    sources: [
-      { name: "JobStreet ASEAN Job Market Reports", url: "https://www.jobstreet.com" },
-      { name: "LinkedIn Workforce Insights", url: "https://economicgraph.linkedin.com" },
-      { name: "ILO Sectoral Employment Database", url: "https://ilostat.ilo.org/topics/employment/" },
-    ],
-    caveat: "Demand scores reflect trends as of 2023–2024 and are directional, not exact. Specific niches within sectors (e.g. Islamic finance in Malaysia) may have significantly higher or lower demand than the sector average."
-  },
-  {
-    icon: "💼",
-    name: "Salary Benchmarks",
-    score_range: "USD / month by experience level",
-    description: "Average gross monthly salary in USD for foreign professionals across three experience tiers: Entry (0–2 years), Mid (3–6 years), and Senior (7+ years). All figures converted using prevailing exchange rates.",
-    formula: [
-      { factor: "Numbeo Average Salary Data", weight: "35%", why: "Crowd-sourced salary data covering multiple cities and roles within each country." },
-      { factor: "JobStreet Salary Reports (ASEAN)", weight: "35%", why: "Platform-specific salary data from actual job postings and employer submissions." },
-      { factor: "LinkedIn Salary Insights", weight: "30%", why: "Professional network salary data skewed toward skilled and managerial roles — relevant for the target audience." },
-    ],
-    sources: [
-      { name: "Numbeo Salaries by Country", url: "https://www.numbeo.com/cost-of-living/country_result.jsp" },
-      { name: "JobStreet Salary Report 2024", url: "https://www.jobstreet.com.my/career-resources/salary-report/" },
-      { name: "LinkedIn Salary", url: "https://www.linkedin.com/salary/" },
-    ],
-    caveat: "Salaries shown are gross estimates before tax. Take-home pay varies by country tax system — Singapore has low personal income tax (0–22%) while Indonesia taxes at progressive rates up to 35%. Salaries for foreigners at the same level can differ from locals due to permit requirements and negotiation dynamics."
-  },
-  {
-    icon: "🔒",
-    name: "Work Permit Difficulty",
-    score_range: "Low / Moderate / High",
-    description: "A qualitative rating of how difficult it is for a foreign worker to obtain and maintain legal working status in each country. Based on number of steps, processing time, cost, and documentation burden.",
-    formula: [
-      { factor: "Number of required steps & documents", weight: "35%", why: "More steps and documents directly increase time, cost, and failure risk." },
-      { factor: "Average processing time", weight: "35%", why: "Longer timelines create uncertainty and delay job start dates." },
-      { factor: "Total estimated cost", weight: "30%", why: "Higher permit costs can be a barrier, especially for entry-level foreign workers." },
-    ],
-    sources: [
-      { name: "Singapore MOM — Employment Pass Guide", url: "https://www.mom.gov.sg/passes-and-permits/employment-pass" },
-      { name: "Indonesia Immigration — KITAS Guide", url: "https://www.imigrasi.go.id/layanan/izin-tinggal-terbatas/" },
-      { name: "Malaysia Immigration — Employment Pass", url: "https://www.imi.gov.my/index.php/en/main-services/expatriate/employment-pass.html" },
-      { name: "Thailand DOE — Work Permit Guide", url: "https://www.doe.go.th/prd/alien/previewwork/param/site/152/cat/93/sub/0/pull/category/view/list-label" },
-    ],
-    caveat: "Permit processes change regularly. This guide reflects documented processes as of 2024. Always confirm with the official immigration authority or a licensed immigration lawyer before proceeding."
-  },
-  {
-    icon: "🎯",
-    name: "Suitability Score",
-    score_range: "0 – 100 (personalized)",
-    description: "A personalized composite score estimating how well a foreign worker's profile matches a specific country and sector combination. Accounts for experience level, market demand, permit difficulty, and foreigner access.",
-    formula: [
-      { factor: "Sector Demand Score", weight: "40%", why: "The single strongest predictor of whether a foreigner can actually find work in a sector." },
-      { factor: "Foreigner Friendliness Score", weight: "35%", why: "Captures systemic openness — countries with higher scores have fewer structural barriers." },
-      { factor: "Permit Difficulty (inverted)", weight: "25%", why: "Higher permit difficulty reduces the effective suitability even if demand is strong." },
-    ],
-    sources: [{ name: "Composite of all sources above", url: "#" }],
-    caveat: "The suitability score is a directional tool, not a guarantee. Individual factors like specific qualifications, language skills, nationality, and personal network can significantly shift real-world outcomes above or below this score."
-  },
+  { icon: "🌏", name: "Foreigner Friendliness Score", score_range: "0–100", description: "A composite index measuring how accessible a country's labor market is to foreign workers.", formula: [{ factor: "World Bank Ease of Doing Business Index", weight: "40%", why: "Countries easier to do business in have more streamlined foreign hiring." }, { factor: "ILO Foreign Labor Participation Rate", weight: "35%", why: "Direct signal of real-world foreigner access." }, { factor: "Work Permit Transparency (official sources)", weight: "25%", why: "Clarity of requirements and predictability of approval." }], sources: [{ name: "World Bank Business Environment", url: "https://www.worldbank.org/en/programs/business-enabling-environment" }, { name: "ILOSTAT", url: "https://ilostat.ilo.org" }, { name: "Singapore MOM", url: "https://www.mom.gov.sg" }, { name: "Indonesia DGCE", url: "https://www.imigrasi.go.id" }, { name: "Malaysia Immigration", url: "https://www.imi.gov.my" }, { name: "Thailand DOE", url: "https://www.doe.go.th" }], caveat: "Scores reflect policy environments as of 2024. Immigration policies change frequently — verify with official sources." },
+  { icon: "📈", name: "Economic Health Score", score_range: "0–100", description: "Measures overall economic strength affecting job availability and salary levels.", formula: [{ factor: "GDP Growth Rate (3-year avg)", weight: "40%", why: "Sustained growth signals expanding job markets." }, { factor: "Unemployment Rate (inverted)", weight: "35%", why: "Lower unemployment = better conditions for skilled hires." }, { factor: "FDI Inflow", weight: "25%", why: "High FDI indicates multinational activity — primary employers of foreign professionals." }], sources: [{ name: "World Bank Open Data", url: "https://data.worldbank.org" }, { name: "ASEAN Stats", url: "https://www.aseanstats.org" }, { name: "IMF World Economic Outlook", url: "https://www.imf.org/en/Publications/WEO" }], caveat: "Figures reflect 2022–2024 averages. Economic conditions are dynamic." },
+  { icon: "💵", name: "Cost of Living (3 Tiers)", score_range: "USD / month", description: "Monthly living cost estimates across Budget, Comfortable, and Luxury lifestyle tiers for a single professional in the country's capital city.", formula: [{ factor: "Numbeo Cost of Living Index", weight: "50%", why: "Largest crowd-sourced COL database globally." }, { factor: "Expatistan Expat Cost Data", weight: "30%", why: "Focuses on expat spending patterns specifically." }, { factor: "Local CPI Data", weight: "20%", why: "Official baseline from national statistics agencies." }], sources: [{ name: "Numbeo", url: "https://www.numbeo.com/cost-of-living/" }, { name: "Expatistan", url: "https://www.expatistan.com" }, { name: "Indonesia BPS", url: "https://www.bps.go.id" }, { name: "Singapore DOS", url: "https://www.singstat.gov.sg" }, { name: "Malaysia DOSM", url: "https://www.dosm.gov.my" }, { name: "Thailand NESDC", url: "https://www.nesdc.go.th" }], caveat: "Budget = frugal expat lifestyle. Comfortable = mid-range. Luxury = premium housing + dining. Bali and Chiang Mai can be 30–40% cheaper than respective capitals." },
+  { icon: "🧾", name: "Tax Estimator", score_range: "Estimate only", description: "Simplified progressive tax calculation showing estimated take-home pay. Uses official tax bracket structures for each country.", formula: [{ factor: "Official tax bracket structures", weight: "100%", why: "Sourced directly from each country's tax authority." }], sources: [{ name: "Indonesia DJP Tax Authority", url: "https://www.pajak.go.id" }, { name: "Singapore IRAS", url: "https://www.iras.gov.sg" }, { name: "Malaysia LHDN", url: "https://www.hasil.gov.my" }, { name: "Thailand Revenue Department", url: "https://www.rd.go.th" }], caveat: "Estimates only. Does not account for deductions, allowances, double taxation treaties, or non-resident rates. Always consult a licensed tax professional." },
+  { icon: "💻", name: "Remote Work Friendliness", score_range: "Easy / Moderate / Difficult", description: "Rates how viable each country is for remote workers and digital nomads based on visa availability, legal clarity, infrastructure, and cost.", formula: [{ factor: "Dedicated remote/nomad visa availability", weight: "40%", why: "Legal pathway is the most critical factor." }, { factor: "Internet infrastructure quality", weight: "30%", why: "Reliable fast internet is non-negotiable for remote work." }, { factor: "Cost of coworking and accommodation", weight: "30%", why: "Affordability determines long-term viability." }], sources: [{ name: "Malaysia DE Rantau", url: "https://www.mdec.my/digital-malaysia/de-rantau" }, { name: "Thailand LTR Visa", url: "https://ltr.boi.go.th" }, { name: "Singapore Tech.Pass", url: "https://www.edb.gov.sg/en/how-we-help/incentives-and-schemes/tech-pass.html" }, { name: "Speedtest Global Index", url: "https://www.speedtest.net/global-index" }], caveat: "Remote work legality is nuanced — working for foreign clients on a tourist visa is technically illegal in most ASEAN countries but enforcement varies. Always verify current regulations." },
 ];
 
 function MethodologyPage() {
   const [expanded, setExpanded] = useState(null);
-
   return (
     <div style={S.section}>
-      <div style={{ marginBottom: 40 }}>
-        <div style={{ fontSize: 32, fontWeight: 900, letterSpacing: "-1px", marginBottom: 10 }}>📐 Data & Methodology</div>
-        <div style={{ fontSize: 15, color: "rgba(255,255,255,0.45)", lineHeight: 1.75, maxWidth: 680 }}>
-          Every score and figure on OpportuNation is derived from publicly available, reputable data sources. This page explains exactly what each metric means, how it is calculated, and where the underlying data comes from — so you can evaluate it critically and verify it yourself.
-        </div>
+      <div style={{ marginBottom: 36 }}>
+        <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: "-1px", marginBottom: 10 }}>📐 Data & Methodology</div>
+        <div style={{ fontSize: 15, color: "rgba(255,255,255,0.45)", lineHeight: 1.75, maxWidth: 680 }}>Every score and figure on OpportuNation is derived from publicly available data. This page explains exactly what each metric means, how it is calculated, and where the data comes from.</div>
       </div>
-
-      {/* Disclaimer banner */}
-      <div style={{ background: "rgba(245,200,66,0.06)", border: "1px solid rgba(245,200,66,0.2)", borderRadius: 14, padding: 20, marginBottom: 40, display: "flex", gap: 14, alignItems: "flex-start" }}>
-        <div style={{ fontSize: 20 }}>⚠️</div>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#f5c842", marginBottom: 6 }}>Important Disclaimer</div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.7 }}>
-            All scores and estimates on this platform are research-based approximations intended for informational and decision-support purposes only. They are not legal or financial advice. Immigration policies, salary markets, and economic conditions change frequently. Always verify critical information with official government sources or a licensed professional before making career or relocation decisions.
-          </div>
-        </div>
+      <div style={{ background: "rgba(245,200,66,0.06)", border: "1px solid rgba(245,200,66,0.2)", borderRadius: 14, padding: 18, marginBottom: 36, display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <div style={{ fontSize: 18 }}>⚠️</div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.7 }}>All scores are research-based approximations for informational purposes only — not legal or financial advice. Immigration policies and market conditions change frequently. Always verify with official sources before making decisions.</div>
       </div>
-
-      {/* Metric cards */}
       {METRICS.map((m, i) => (
-        <div key={i} style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${expanded === i ? "rgba(0,229,160,0.25)" : "rgba(255,255,255,0.07)"}`, borderRadius: 16, marginBottom: 14, overflow: "hidden", transition: "border 0.2s" }}>
-          {/* Header */}
-          <div onClick={() => setExpanded(expanded === i ? null : i)} style={{ padding: "22px 26px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <div style={{ fontSize: 28 }}>{m.icon}</div>
+        <div key={i} style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${expanded === i ? "rgba(0,229,160,0.25)" : "rgba(255,255,255,0.07)"}`, borderRadius: 16, marginBottom: 12, overflow: "hidden" }}>
+          <div onClick={() => setExpanded(expanded === i ? null : i)} style={{ padding: "20px 24px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ fontSize: 26 }}>{m.icon}</div>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800 }}>{m.name}</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 3 }}>Range: {m.score_range}</div>
+                <div style={{ fontSize: 15, fontWeight: 800 }}>{m.name}</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>Range: {m.score_range}</div>
               </div>
             </div>
-            <div style={{ fontSize: 18, color: "rgba(255,255,255,0.3)", transition: "transform 0.2s", transform: expanded === i ? "rotate(180deg)" : "rotate(0deg)" }}>▾</div>
+            <div style={{ fontSize: 16, color: "rgba(255,255,255,0.3)", transition: "transform 0.2s", transform: expanded === i ? "rotate(180deg)" : "none" }}>▾</div>
           </div>
-
-          {/* Expanded content */}
           {expanded === i && (
-            <div style={{ padding: "0 26px 26px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-              <p style={{ fontSize: 14, color: "rgba(255,255,255,0.55)", lineHeight: 1.75, marginTop: 20, marginBottom: 24 }}>{m.description}</p>
-
-              {/* Formula */}
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 14 }}>How It's Calculated</div>
-              <div style={{ marginBottom: 28 }}>
+            <div style={{ padding: "0 24px 24px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <p style={{ fontSize: 14, color: "rgba(255,255,255,0.55)", lineHeight: 1.75, marginTop: 18, marginBottom: 20 }}>{m.description}</p>
+              <div style={S.label}>How It's Calculated</div>
+              <div style={{ marginBottom: 24 }}>
                 {m.formula.map((f, fi) => (
-                  <div key={fi} style={{ display: "grid", gridTemplateColumns: "180px 60px 1fr", gap: 16, padding: "12px 16px", background: "rgba(255,255,255,0.02)", borderRadius: 10, marginBottom: 8, alignItems: "start" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>{f.factor}</div>
+                  <div key={fi} style={{ display: "grid", gridTemplateColumns: "1fr 60px 2fr", gap: 12, padding: "10px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10, marginBottom: 6, alignItems: "start" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{f.factor}</div>
                     <div style={{ fontSize: 13, fontWeight: 800, color: "#00e5a0", textAlign: "center" }}>{f.weight}</div>
                     <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.6 }}>{f.why}</div>
                   </div>
                 ))}
               </div>
-
-              {/* Sources */}
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 14 }}>Data Sources</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
+              <div style={S.label}>Data Sources</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
                 {m.sources.map((src, si) => (
-                  src.url === "#"
-                    ? <span key={si} style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.04)", padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)" }}>{src.name}</span>
-                    : <a key={si} href={src.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#00e5a0", background: "rgba(0,229,160,0.06)", padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(0,229,160,0.2)", textDecoration: "none", fontWeight: 600 }}>{src.name} ↗</a>
+                  <a key={si} href={src.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#00e5a0", background: "rgba(0,229,160,0.06)", padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(0,229,160,0.2)", textDecoration: "none", fontWeight: 600 }}>{src.name} ↗</a>
                 ))}
               </div>
-
-              {/* Caveat */}
-              <div style={{ background: "rgba(245,200,66,0.05)", border: "1px solid rgba(245,200,66,0.15)", borderRadius: 10, padding: "12px 16px", display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <div style={{ fontSize: 14 }}>⚠️</div>
-                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", lineHeight: 1.65 }}>{m.caveat}</div>
-              </div>
+              <div style={{ background: "rgba(245,200,66,0.05)", border: "1px solid rgba(245,200,66,0.15)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "rgba(255,255,255,0.45)", lineHeight: 1.65 }}>⚠️ {m.caveat}</div>
             </div>
           )}
         </div>
       ))}
-
-      {/* Last updated */}
-      <div style={{ marginTop: 40, padding: "20px 24px", background: "rgba(255,255,255,0.02)", borderRadius: 12, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+      <div style={{ marginTop: 36, padding: "18px 22px", background: "rgba(255,255,255,0.02)", borderRadius: 12, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>📅 Data last reviewed: <span style={{ color: "rgba(255,255,255,0.5)", fontWeight: 600 }}>Q1 2026</span></div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>Built by <span style={{ color: "rgba(255,255,255,0.5)", fontWeight: 600 }}>Rachit K.</span> · Applied Statistics · Edtech & BizOps Background</div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>Built by <span style={{ color: "rgba(255,255,255,0.5)", fontWeight: 600 }}>Rachit K.</span> · Applied Statistics</div>
       </div>
     </div>
   );
 }
 
+// ── MAIN APP ──────────────────────────────────────────────────────────────────
+
 export default function App() {
-  const [page, setPage] = useState("home"); // home | country | tools
+  const [page, setPage] = useState("home");
   const [selectedCountry, setSelectedCountry] = useState(null);
   const [selectedSector, setSelectedSector] = useState(null);
-  const [sectorView, setSectorView] = useState("overview"); // overview | permit
+  const [sectorView, setSectorView] = useState("overview");
   const [toolTab, setToolTab] = useState("calculator");
   const [hovC, setHovC] = useState(null);
   const [hovS, setHovS] = useState(null);
+  const [currency, setCurrency] = useState("USD");
 
   const country = selectedCountry ? COUNTRIES[selectedCountry] : null;
   const sectorData = country && selectedSector ? country.sectors[selectedSector] : null;
-
-  
 
   return (
     <div style={S.app}>
@@ -624,18 +669,28 @@ export default function App() {
       <div style={S.header}>
         <div style={{ cursor: "pointer" }} onClick={() => { setPage("home"); setSelectedCountry(null); setSelectedSector(null); }}>
           <div style={S.logo}>Opportu<span style={{ color: "#00e5a0" }}>Nation</span></div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", letterSpacing: 2, textTransform: "uppercase" }}>ASEAN Foreign Worker Navigator</div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", letterSpacing: 2, textTransform: "uppercase" }}>ASEAN Foreign Worker Navigator</div>
         </div>
         <div style={S.nav}>
           <button style={S.navBtn(page === "home" || page === "country")} onClick={() => { setPage("home"); setSelectedCountry(null); setSelectedSector(null); }}>🌏 Countries</button>
           <button style={S.navBtn(page === "tools")} onClick={() => setPage("tools")}>🛠 Tools</button>
           <button style={S.navBtn(page === "methodology")} onClick={() => setPage("methodology")}>📐 Methodology</button>
+          <select style={S.currencySelect} value={currency} onChange={e => setCurrency(e.target.value)}>
+            {Object.keys(CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
       </div>
 
+      {/* CURRENCY NOTE */}
+      {currency !== "USD" && (
+        <div style={{ background: "rgba(0,229,160,0.04)", borderBottom: "1px solid rgba(0,229,160,0.1)", padding: "8px 24px", fontSize: 11, color: "rgba(0,229,160,0.6)", textAlign: "center" }}>
+          Showing values in {currency} · Rates approximate as of Q1 2026 · All salary data sourced in USD
+        </div>
+      )}
+
       {/* STATS BANNER */}
       <div style={S.statsBanner}>
-        {[["4", "Countries Covered"], ["4", "Job Sectors"], ["16+", "Market Insights"], ["3", "Job Platforms"]].map(([n, l]) => (
+        {[["4", "Countries"], ["4", "Sectors"], ["3", "COL Tiers"], ["5", "Currencies"]].map(([n, l]) => (
           <div key={l} style={S.statItem}>
             <div style={S.statNum}>{n}</div>
             <div style={S.statLabel}>{l}</div>
@@ -643,22 +698,26 @@ export default function App() {
         ))}
       </div>
 
-      {/* HOME PAGE */}
+      {/* HOME */}
       {page === "home" && !selectedCountry && (
         <>
           <div style={S.hero}>
             <div style={S.heroTitle}>Navigate Your Career<br />Across ASEAN</div>
-            <div style={S.heroSub}>Real insights on job markets, salary benchmarks, work permit guides, and live job opportunities — built for foreign workers making real decisions.</div>
+            <div style={S.heroSub}>Real insights on job markets, salary benchmarks, tax estimates, remote work options, and work permit guides — built for foreign workers making real decisions.</div>
           </div>
           <div style={S.grid}>
             {Object.entries(COUNTRIES).map(([name, data]) => (
               <div key={name} style={S.card(hovC === name)} onMouseEnter={() => setHovC(name)} onMouseLeave={() => setHovC(null)} onClick={() => { setSelectedCountry(name); setPage("country"); }}>
-                <div style={{ fontSize: 38, marginBottom: 10 }}>{data.flag}</div>
-                <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 2 }}>{name}</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 16 }}>{data.capital} · {data.currency}</div>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>{data.flag}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 2 }}>{name}</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>{data.capital}</div>
                 <div style={S.label}>Foreigner Friendliness</div>
                 <ScoreBar score={data.foreignerFriendliness} />
-                <div style={{ fontSize: 13, color: scoreColor(data.foreignerFriendliness), fontWeight: 700, marginTop: 6 }}>{data.foreignerFriendliness}/100</div>
+                <div style={{ fontSize: 12, color: scoreColor(data.foreignerFriendliness), fontWeight: 700, marginTop: 5 }}>{data.foreignerFriendliness}/100</div>
+                <div style={{ marginTop: 12 }}>
+                  <div style={S.label}>Remote Work</div>
+                  <Badge label={data.remoteWork.rating} color={accessColor(data.remoteWork.rating)} />
+                </div>
               </div>
             ))}
           </div>
@@ -669,55 +728,50 @@ export default function App() {
       {page === "country" && selectedCountry && country && !selectedSector && (
         <div style={S.section}>
           <button style={S.backBtn} onClick={() => { setSelectedCountry(null); setPage("home"); }}>← All Countries</button>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 36 }}>
-            <div style={{ fontSize: 56 }}>{country.flag}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 52 }}>{country.flag}</div>
             <div>
-              <div style={{ fontSize: 36, fontWeight: 900, letterSpacing: "-1px" }}>{selectedCountry}</div>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.35)" }}>{country.currency} · {country.language}</div>
+              <div style={{ fontSize: 32, fontWeight: 900, letterSpacing: "-1px" }}>{selectedCountry}</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>{country.currency} · {country.language}</div>
             </div>
           </div>
 
           <div style={S.infoGrid}>
-            {[
-              ["Economic Score", country.economicScore, `${country.economicScore}/100`],
-              ["Foreigner Friendliness", country.foreignerFriendliness, `${country.foreignerFriendliness}/100`],
-              ["Permit Difficulty", 100 - country.permitDifficultyScore, country.workPermitDifficulty],
-            ].map(([label, score, val]) => (
+            {[["Economic Score", country.economicScore, `${country.economicScore}/100`], ["Foreigner Friendliness", country.foreignerFriendliness, `${country.foreignerFriendliness}/100`], ["Permit Difficulty", 100 - country.permitDifficultyScore, country.workPermitDifficulty]].map(([label, score, val]) => (
               <div key={label} style={S.infoCard}>
                 <div style={S.label}>{label}</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: scoreColor(score), marginBottom: 8 }}>{val}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: scoreColor(score), marginBottom: 8 }}>{val}</div>
                 <ScoreBar score={score} color={scoreColor(score)} />
               </div>
             ))}
             <div style={S.infoCard}>
-              <div style={S.label}>Est. Cost of Living</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>${country.costOfLivingUSD.toLocaleString()}/mo</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>{country.capital} · USD equivalent</div>
+              <div style={S.label}>Cost of Living — {country.capital}</div>
+              <ColTiers col={country.costOfLiving} currency={currency} />
             </div>
           </div>
 
           <div style={S.overviewBox}>
-            <div style={{ fontSize: 11, color: "#00e5a0", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>🌏 Overview for Foreign Workers</div>
+            <div style={{ fontSize: 11, color: "#00e5a0", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>🌏 Overview</div>
             <div style={{ fontSize: 14, lineHeight: 1.75, color: "rgba(255,255,255,0.65)" }}>{country.overview}</div>
           </div>
 
           <div style={S.policyBox}>
-            <div style={{ fontSize: 11, color: "rgba(120,150,255,0.8)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>📋 Recent Policy Update</div>
+            <div style={{ fontSize: 11, color: "rgba(120,150,255,0.8)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>📋 Recent Policy</div>
             <div style={{ fontSize: 14, lineHeight: 1.65, color: "rgba(255,255,255,0.55)" }}>{country.recentPolicy}</div>
           </div>
 
-          <div style={{ ...S.sectionTitle, marginBottom: 16 }}>Select a Sector to Explore</div>
+          <RemoteWorkSection countryName={selectedCountry} />
+
+          <div style={{ ...S.sectionTitle, marginBottom: 14 }}>Select a Sector</div>
           <div style={S.sectorGrid}>
             {SECTORS.map(sec => {
               const s = country.sectors[sec];
               return (
-                <div key={sec} style={S.sectorCard(hovS === sec)} onMouseEnter={() => setHovS(sec)} onMouseLeave={() => setHovS(null)} onClick={() => setSelectedSector(sec)}>
-                  <div style={{ fontSize: 26, marginBottom: 10 }}>{SECTOR_ICONS[sec]}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>{sec}</div>
-                  <div style={S.label}>Demand</div>
+                <div key={sec} style={S.sectorCard(hovS === sec)} onMouseEnter={() => setHovS(sec)} onMouseLeave={() => setHovS(null)} onClick={() => { setSelectedSector(sec); setSectorView("overview"); }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>{SECTOR_ICONS[sec]}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{sec}</div>
                   <ScoreBar score={s.demandScore} />
-                  <div style={{ fontSize: 12, color: "#00e5a0", fontWeight: 600, marginTop: 6 }}>${s.avgSalaryUSD.mid.toLocaleString()}/mo avg</div>
+                  <div style={{ fontSize: 12, color: "#00e5a0", fontWeight: 600, marginTop: 6 }}>{fmt(s.avgSalaryUSD.mid, currency)}/mo avg</div>
                 </div>
               );
             })}
@@ -732,14 +786,12 @@ export default function App() {
       {page === "country" && selectedCountry && selectedSector && sectorData && (
         <div style={S.section}>
           <button style={S.backBtn} onClick={() => setSelectedSector(null)}>← Back to {selectedCountry}</button>
-
-          <div style={{ marginBottom: 28 }}>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 6 }}>{country.flag} {selectedCountry}</div>
-            <div style={{ fontSize: 34, fontWeight: 900, letterSpacing: "-1px" }}>{SECTOR_ICONS[selectedSector]} {selectedSector}</div>
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>{country.flag} {selectedCountry}</div>
+            <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: "-1px" }}>{SECTOR_ICONS[selectedSector]} {selectedSector}</div>
           </div>
 
-          {/* Experience tabs */}
-          <div style={{ ...S.label, marginBottom: 10 }}>Select Experience Level</div>
+          <div style={S.label}>Experience Level</div>
           <div style={S.tabRow}>
             {EXPERIENCE_LEVELS.map(l => (
               <button key={l} style={S.tab(sectorView === l)} onClick={() => setSectorView(l)}>{EXPERIENCE_LABELS[l]}</button>
@@ -748,47 +800,42 @@ export default function App() {
 
           {EXPERIENCE_LEVELS.includes(sectorView) && (() => {
             const salary = sectorData.avgSalaryUSD[sectorView];
-            const buffer = salary - country.costOfLivingUSD;
+            const buffer = salary - country.costOfLiving.comfortable;
             return (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14, marginBottom: 24 }}>
-                <div style={{ ...S.infoCard, background: "rgba(0,229,160,0.05)", border: "1px solid rgba(0,229,160,0.15)" }}>
-                  <div style={S.label}>Avg Salary ({EXPERIENCE_LABELS[sectorView].split(" ")[0]})</div>
-                  <div style={{ fontSize: 30, fontWeight: 900, color: "#00e5a0" }}>${salary.toLocaleString()}<span style={{ fontSize: 14, fontWeight: 400, color: "rgba(255,255,255,0.3)" }}>/mo</span></div>
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 20 }}>
+                  <div style={{ ...S.infoCard, background: "rgba(0,229,160,0.05)", border: "1px solid rgba(0,229,160,0.15)" }}>
+                    <div style={S.label}>Avg Salary</div>
+                    <div style={{ fontSize: 26, fontWeight: 900, color: "#00e5a0" }}>{fmt(salary, currency)}<span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>/mo</span></div>
+                  </div>
+                  <div style={S.infoCard}>
+                    <div style={S.label}>Buffer vs Comfortable COL</div>
+                    <div style={{ fontSize: 26, fontWeight: 900, color: buffer > 0 ? "#00e5a0" : "#ff6b6b" }}>{fmt(buffer, currency)}/mo</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 3 }}>{buffer > 500 ? "✓ Comfortable" : buffer > 0 ? "⚠ Tight" : "✗ Deficit"}</div>
+                  </div>
+                  <div style={S.infoCard}>
+                    <div style={S.label}>Foreign Access</div>
+                    <Badge label={sectorData.foreignAccess} color={accessColor(sectorData.foreignAccess)} />
+                  </div>
+                  <div style={S.infoCard}>
+                    <div style={S.label}>Market Demand</div>
+                    <Badge label={sectorData.demand} color={scoreColor(sectorData.demandScore)} />
+                    <div style={{ marginTop: 8 }}><ScoreBar score={sectorData.demandScore} /></div>
+                  </div>
                 </div>
-                <div style={S.infoCard}>
-                  <div style={S.label}>Cost of Living Buffer</div>
-                  <div style={{ fontSize: 30, fontWeight: 900, color: buffer > 0 ? "#00e5a0" : "#ff6b6b" }}>${buffer.toLocaleString()}/mo</div>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 4 }}>{buffer > 500 ? "✓ Comfortable" : buffer > 0 ? "⚠ Tight" : "✗ Deficit"}</div>
-                </div>
-                <div style={S.infoCard}>
-                  <div style={S.label}>Foreign Access</div>
-                  <Badge label={sectorData.foreignAccess} color={accessColor(sectorData.foreignAccess)} />
-                </div>
-                <div style={S.infoCard}>
-                  <div style={S.label}>Market Demand</div>
-                  <Badge label={sectorData.demand} color={scoreColor(sectorData.demandScore)} />
-                  <div style={{ marginTop: 10 }}><ScoreBar score={sectorData.demandScore} /></div>
-                </div>
-              </div>
+                <TaxEstimator grossUSD={salary} countryName={selectedCountry} currency={currency} />
+              </>
             );
           })()}
 
-          {!EXPERIENCE_LEVELS.includes(sectorView) && (
-            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14 }}>Select an experience level above to see salary details.</p>
-          )}
-
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>Market Insights</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, marginTop: 20 }}>Market Insights</div>
           <div style={S.notesBox}>{sectorData.notes}</div>
 
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🔍 Find Live Job Postings</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🔍 Live Job Postings</div>
           <div style={S.jobLinkRow}>
             {Object.entries(country.jobLinks).map(([platform, url]) => (
               <a key={platform} href={url} target="_blank" rel="noopener noreferrer" style={S.jobLink}>{platform} →</a>
             ))}
-          </div>
-
-          <div style={{ marginTop: 32, padding: 18, background: "rgba(255,255,255,0.02)", borderRadius: 12, fontSize: 13, color: "rgba(255,255,255,0.35)", lineHeight: 1.65 }}>
-            💡 <strong style={{ color: "rgba(255,255,255,0.6)" }}>Tip:</strong> Use the Country Comparison tool to benchmark this salary against other ASEAN options before deciding.
           </div>
         </div>
       )}
@@ -796,27 +843,25 @@ export default function App() {
       {/* TOOLS PAGE */}
       {page === "tools" && (
         <div style={S.section}>
-          <div style={{ fontSize: 32, fontWeight: 900, letterSpacing: "-1px", marginBottom: 8 }}>🛠 Analytics Tools</div>
-          <div style={{ fontSize: 15, color: "rgba(255,255,255,0.4)", marginBottom: 32 }}>Personalized tools to help you make smarter career decisions across ASEAN.</div>
-
+          <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: "-1px", marginBottom: 6 }}>🛠 Analytics Tools</div>
+          <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginBottom: 28 }}>Personalized tools to help you make smarter career decisions across ASEAN.</div>
           <div style={S.tabRow}>
-            {[["calculator", "💰 Salary Calculator"], ["suitability", "🎯 Suitability Score"], ["compare", "⚖️ Country Comparison"]].map(([id, label]) => (
+            {[["calculator", "💰 Salary Calculator"], ["suitability", "🎯 Suitability Score"], ["compare", "⚖️ Comparison"]].map(([id, label]) => (
               <button key={id} style={S.tab(toolTab === id)} onClick={() => setToolTab(id)}>{label}</button>
             ))}
           </div>
-
-          {toolTab === "calculator" && <SalaryCalculator />}
-          {toolTab === "suitability" && <SuitabilityScore />}
-          {toolTab === "compare" && <CountryComparison />}
+          {toolTab === "calculator" && <SalaryCalculator currency={currency} />}
+          {toolTab === "suitability" && <SuitabilityScore currency={currency} />}
+          {toolTab === "compare" && <CountryComparison currency={currency} />}
         </div>
       )}
 
-      {/* METHODOLOGY PAGE */}
+      {/* METHODOLOGY */}
       {page === "methodology" && <MethodologyPage />}
 
       {/* FOOTER */}
       <div style={S.footer}>
-        OpportuNation · Built for foreign workers navigating ASEAN job markets · Data sourced from ILO, World Bank & national statistics agencies
+        OpportuNation · ASEAN Foreign Worker Navigator · Data: ILO, World Bank, Numbeo, national statistics agencies · Q1 2026
       </div>
     </div>
   );
